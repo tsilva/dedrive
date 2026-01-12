@@ -818,22 +818,19 @@ def create_ui():
                     visible=False,
                 )
 
-                # Paths side-by-side (prominent display)
-                with gr.Row():
-                    path_a = gr.Textbox(label="Path A", interactive=False, scale=1)
-                    path_b = gr.Textbox(label="Path B", interactive=False, scale=1)
-
                 # Side-by-side comparison
                 with gr.Row():
                     with gr.Column():
-                        gr.Markdown("### File A")
+                        gr.Markdown("### FILE A")
+                        path_a = gr.Textbox(show_label=False, interactive=False)
                         preview_img_a = gr.Image(label="Preview", height=300, visible=True)
                         preview_code_a = gr.Code(label="Preview", language="json", visible=False, lines=12)
                         metadata_a = gr.Markdown()
                         link_a = gr.Markdown()
 
                     with gr.Column():
-                        gr.Markdown("### File B")
+                        gr.Markdown("### FILE B")
+                        path_b = gr.Textbox(show_label=False, interactive=False)
                         preview_img_b = gr.Image(label="Preview", height=300, visible=True)
                         preview_code_b = gr.Code(label="Preview", language="json", visible=False, lines=12)
                         metadata_b = gr.Markdown()
