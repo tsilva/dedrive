@@ -795,12 +795,6 @@ def create_ui():
                 scan_summary = gr.Markdown()
                 decisions_info = gr.Markdown()
 
-                scan_btn.click(
-                    fn=run_scan,
-                    inputs=[path_input],
-                    outputs=[scan_status, scan_summary, decisions_info],
-                )
-
             # =================================================================
             # Tab 2: Review Duplicates
             # =================================================================
@@ -868,6 +862,15 @@ def create_ui():
                 ]
 
                 # Wire up events
+                scan_btn.click(
+                    fn=run_scan,
+                    inputs=[path_input],
+                    outputs=[scan_status, scan_summary, decisions_info],
+                ).then(
+                    fn=update_review_display,
+                    outputs=review_outputs,
+                ).then(fn=get_stats_display, outputs=[stats_display])
+
                 search_btn.click(
                     fn=on_search,
                     inputs=[search_input],
