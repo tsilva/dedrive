@@ -77,7 +77,7 @@ class AppState:
     # Navigation
     current_index: int = 0
     filtered_indices: list[int] = field(default_factory=list)
-    filter_status: str = "all"
+    filter_status: str = "pending"
     search_term: str = ""
 
     # Decisions
@@ -195,7 +195,7 @@ def load_scan_results() -> bool:
         state.path_cache = {}  # Will be rebuilt as needed
 
         # Apply default filter
-        state.filter_status = "all"
+        state.filter_status = "pending"
         state.search_term = ""
         state.current_index = 0
         apply_filter()
@@ -398,7 +398,7 @@ def run_scan(path_filter: str, progress=gr.Progress()):
     state.decisions = load_decisions()
 
     # Apply filter
-    state.filter_status = "all"
+    state.filter_status = "pending"
     state.search_term = ""
     apply_filter()
 
@@ -576,9 +576,9 @@ def update_review_display():
         )
 
 
-def on_filter_change(status: str, search: str):
-    """Handle filter changes."""
-    state.filter_status = status
+def on_search(search: str):
+    """Handle search changes. Always filters to pending (undecided) items."""
+    state.filter_status = "pending"
     state.search_term = search
     state.current_index = 0
     apply_filter()
@@ -680,12 +680,10 @@ def on_multi_file_select(selected_id: str):
 def get_stats_display():
     """Get statistics display for review tab."""
     total = len(state.duplicate_groups)
-    filtered = len(state.filtered_indices)
-    decided = sum(1 for d in state.decisions.values() if d.action != "skip")
-    skipped = sum(1 for d in state.decisions.values() if d.action == "skip")
-    pending = total - len(state.decisions)
+    decided = len(state.decisions)
+    pending = total - decided
 
-    return f"**Total:** {total:,} | **Showing:** {filtered:,} | **Decided:** {decided:,} | **Skipped:** {skipped:,} | **Pending:** {pending:,}"
+    return f"**Pending:** {pending:,} | **Decided:** {decided:,} | **Total:** {total:,}"
 
 
 # =============================================================================
@@ -796,20 +794,14 @@ def create_ui():
                 # Stats row
                 stats_display = gr.Markdown(value=get_stats_display)
 
-                # Filters
+                # Search
                 with gr.Row():
-                    filter_status = gr.Dropdown(
-                        choices=["all", "pending", "decided", "skipped"],
-                        value="all",
-                        label="Filter by Status",
-                        scale=1,
-                    )
                     search_input = gr.Textbox(
                         label="Search (path or filename)",
                         placeholder="Enter search term...",
-                        scale=2,
+                        scale=3,
                     )
-                    filter_btn = gr.Button("Apply Filter", scale=1)
+                    search_btn = gr.Button("Search", scale=1)
 
                 # Navigation
                 with gr.Row():
@@ -865,9 +857,9 @@ def create_ui():
                 ]
 
                 # Wire up events
-                filter_btn.click(
-                    fn=on_filter_change,
-                    inputs=[filter_status, search_input],
+                search_btn.click(
+                    fn=on_search,
+                    inputs=[search_input],
                     outputs=review_outputs,
                 ).then(fn=get_stats_display, outputs=[stats_display])
 
