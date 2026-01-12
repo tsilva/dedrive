@@ -9,4 +9,5 @@ dependencies = [
     "google-auth-oauthlib",
     "gradio>=4.0.0",
     "pdf2image>=1.16.0",
+    "python-dotenv>=1.0.0",
 ]

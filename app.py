@@ -23,7 +23,9 @@ from main import (
     calculate_savings,
     format_size,
     filter_by_path,
+    filter_excluded_paths,
 )
+from config import get_exclude_paths
 
 # Constants
 OUTPUT_DIR = Path(".output")
@@ -381,6 +383,12 @@ def run_scan(path_filter: str, progress=gr.Progress()):
         progress(0.6, desc=f"Filtering to path: {path_filter}")
         files_to_scan = filter_by_path(files_to_scan, path_filter.strip(), state.files_by_id, state.path_cache)
 
+    # Apply exclude paths from config file and env var
+    exclude_paths = get_exclude_paths()
+    if exclude_paths:
+        progress(0.65, desc=f"Applying {len(exclude_paths)} exclude path(s)...")
+        files_to_scan = filter_excluded_paths(files_to_scan, exclude_paths, state.files_by_id, state.path_cache)
+
     progress(0.7, desc="Finding duplicates...")
     raw_duplicates, skipped = find_duplicates(files_to_scan)
 
@@ -417,6 +425,12 @@ def run_scan(path_filter: str, progress=gr.Progress()):
 
     status = f"Scan complete! Found {total_files:,} files."
 
+    # Build exclude paths info for summary
+    exclude_info = ""
+    if exclude_paths:
+        exclude_list = ", ".join([f"`{p}`" for p in exclude_paths])
+        exclude_info = f"\n- **Excluded paths:** {exclude_list}"
+
     summary = f"""### Results Summary
 
 - **Total files scanned:** {total_files:,}
@@ -424,7 +438,7 @@ def run_scan(path_filter: str, progress=gr.Progress()):
 - **Duplicate pairs:** {total_pairs:,}
 - **Uncertain groups:** {uncertain:,} (same MD5, different size)
 - **Potential savings:** {format_size(savings)}
-- **Skipped:** {skipped:,} Google Workspace files (no MD5)
+- **Skipped:** {skipped:,} Google Workspace files (no MD5){exclude_info}
 """
 
     decided = len(state.decisions)
@@ -548,7 +562,7 @@ def update_review_display():
 
     # For groups with 3+ files, show selector on right side
     else:
-        choices = [(f"{f.name} ({f.path})", f.id) for f in group.files]
+        choices = [(f.path, f.id) for f in group.files]
 
         # Default selected file (first one)
         selected_file = group.files[0]

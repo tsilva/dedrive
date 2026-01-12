@@ -15,6 +15,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from config import get_exclude_paths
+
 SCOPES = [
     "https://www.googleapis.com/auth/drive.metadata.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
@@ -145,6 +147,52 @@ def filter_by_path(
     return result
 
 
+def filter_excluded_paths(
+    files: list[dict],
+    exclude_paths: list[str],
+    files_by_id: dict[str, dict],
+    path_cache: dict[str, str],
+) -> list[dict]:
+    """Filter out files whose paths match any of the exclude patterns.
+
+    Args:
+        files: List of file dicts to filter
+        exclude_paths: List of paths to exclude (e.g., ["/Backup/Old", "/tmp"])
+        files_by_id: Lookup dict for file IDs
+        path_cache: Cache for resolved paths
+
+    Returns:
+        Files that don't match any exclude path.
+    """
+    if not exclude_paths:
+        return files
+
+    # Normalize exclude paths
+    normalized_excludes = []
+    for ep in exclude_paths:
+        ep = ep.rstrip("/")
+        if ep:
+            normalized_excludes.append(ep)
+
+    result = []
+    excluded_count = 0
+    for file in files:
+        path = get_path(file["id"], files_by_id, path_cache)
+        excluded = False
+        for exclude in normalized_excludes:
+            if path.startswith(exclude + "/") or path == exclude:
+                excluded = True
+                excluded_count += 1
+                break
+        if not excluded:
+            result.append(file)
+
+    if excluded_count > 0:
+        print(f"Excluded {excluded_count} files matching exclude patterns")
+
+    return result
+
+
 def find_duplicates(files: list[dict]) -> tuple[list[dict], int]:
     """Group files by MD5 and identify duplicates."""
     files_by_md5 = defaultdict(list)
@@ -240,6 +288,14 @@ def main():
         "--path", "-p", help="Scan specific path (default: all files)"
     )
     parser.add_argument(
+        "--exclude",
+        "-e",
+        action="append",
+        default=[],
+        help="Exclude paths from scan (can be specified multiple times). "
+        "Also reads from config.json and GDRIVE_EXCLUDE_PATHS env var.",
+    )
+    parser.add_argument(
         "--output", "-o", default=".output/duplicates.csv", help="Output CSV file"
     )
     parser.add_argument(
@@ -265,6 +321,13 @@ def main():
         print(f"Filtering to path: {args.path}")
         files = filter_by_path(files, args.path, files_by_id, path_cache)
         print(f"Filtered to {len(files)} items")
+
+    # Combine exclude paths from CLI args, config file, and env var
+    exclude_paths = list(args.exclude) + get_exclude_paths()
+    if exclude_paths:
+        print(f"Excluding paths: {exclude_paths}")
+        files = filter_excluded_paths(files, exclude_paths, files_by_id, path_cache)
+        print(f"After exclusions: {len(files)} items")
 
     print("Finding duplicates...")
     duplicates, skipped = find_duplicates(files)

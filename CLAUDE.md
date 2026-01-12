@@ -17,6 +17,9 @@ uv run main.py
 # Scan specific folder (CLI)
 uv run main.py --path "/Photos"
 
+# Exclude folders from scan (CLI)
+uv run main.py --exclude "/Backup/Old" --exclude "/tmp"
+
 # Custom output file (CLI)
 uv run main.py --output .output/custom.csv
 
@@ -25,6 +28,37 @@ uv run main.py --credentials path/to/creds.json
 ```
 
 **Note:** PDF preview in the web UI requires poppler: `brew install poppler` (macOS)
+
+## Configuration
+
+### Exclude Paths
+
+Folders can be excluded from scans using three methods (combined):
+
+1. **CLI argument:** `--exclude "/path/to/exclude"` (can specify multiple times)
+2. **Config file:** Create `config.json` with an `exclude_paths` array
+3. **Environment variable:** Set `GDRIVE_EXCLUDE_PATHS` (comma-separated paths)
+
+Example `config.json`:
+```json
+{
+  "exclude_paths": [
+    "/documentor-puzzle/export",
+    "/Backup/Old",
+    "/tmp"
+  ]
+}
+```
+
+Example `.env` file (recommended):
+```
+GDRIVE_EXCLUDE_PATHS=/documentor-puzzle/export,/Backup/Old
+```
+
+Or via shell environment variable:
+```bash
+export GDRIVE_EXCLUDE_PATHS="/documentor-puzzle/export,/Backup/Old"
+```
 
 ## Architecture
 
