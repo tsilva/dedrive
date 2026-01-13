@@ -80,10 +80,10 @@ Gradio-based interface for the full deduplication workflow.
 **Features:**
 - **Scan Tab:** Run scans with progress feedback
 - **Review Tab:** Side-by-side file comparison with previews, make keep/skip decisions
-- **Export Tab:** Generate decisions.json for later execution
+- **Export Tab:** Preview and execute moves, export decisions.json
 
 **Key design decisions:**
-- Uses `drive.readonly` scope (allows file content download for preview)
+- Uses `drive` scope (full access for file moves)
 - Fetches all files in one query then filters locally (faster than recursive folder traversal)
 - Path resolution uses memoization (`path_cache`) for efficiency
 - Files with same MD5 but different size marked as "uncertain"
@@ -91,4 +91,18 @@ Gradio-based interface for the full deduplication workflow.
 - Decisions auto-save to `.output/decisions.json` (resume sessions)
 - File previews cached in `.output/preview_cache/`
 
-**Output:** `.output/duplicates.csv` (scan results), `.output/decisions.json` (user decisions)
+**Output:** `.output/duplicates.csv` (scan results), `.output/decisions.json` (user decisions), `.output/execution_log.json` (move results)
+
+### Moving Duplicates
+
+Instead of deleting duplicates, files are moved to a `/_dupes` folder at the root of your Google Drive:
+
+1. **Scan** your drive to find duplicates
+2. **Review** and mark which files to keep
+3. **Preview (Dry Run)** to see what would be moved
+4. **Execute** to move duplicates to `/_dupes`
+
+The original folder structure is preserved under `/_dupes`:
+- `/Photos/2024/IMG.jpg` → `/_dupes/Photos/2024/IMG.jpg`
+
+**Re-authentication required:** If you previously used this tool with read-only access, delete `token.json` and re-authenticate to grant move permissions.

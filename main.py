@@ -18,8 +18,7 @@ from googleapiclient.errors import HttpError
 from config import get_exclude_paths
 
 SCOPES = [
-    "https://www.googleapis.com/auth/drive.metadata.readonly",
-    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive",  # Full access for move operations
 ]
 TOKEN_FILE = "token.json"
 CREDENTIALS_FILE = "credentials.json"

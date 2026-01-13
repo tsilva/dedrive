@@ -767,6 +767,279 @@ def export_decisions():
 
 
 # =============================================================================
+# Move to _dupes Functions
+# =============================================================================
+
+EXECUTION_LOG_FILE = OUTPUT_DIR / "execution_log.json"
+
+
+def get_or_create_dupes_folder(service) -> str:
+    """Get or create the root _dupes folder. Returns folder ID."""
+    # Search for existing _dupes folder at root
+    query = "name = '_dupes' and mimeType = 'application/vnd.google-apps.folder' and 'root' in parents and trashed = false"
+    results = service.files().list(q=query, fields="files(id, name)").execute()
+
+    if results.get("files"):
+        return results["files"][0]["id"]
+
+    # Create _dupes folder at root
+    file_metadata = {
+        "name": "_dupes",
+        "mimeType": "application/vnd.google-apps.folder",
+    }
+    folder = service.files().create(body=file_metadata, fields="id").execute()
+    return folder.get("id")
+
+
+def ensure_folder_path(service, path: str, dupes_root_id: str, folder_cache: dict) -> str:
+    """Ensure folder structure exists under _dupes mirroring the original path.
+
+    For path /Photos/2024/January/IMG.jpg, creates:
+    /_dupes/Photos/2024/January
+
+    Uses folder_cache to avoid repeated API calls for same paths.
+    Returns the target folder ID.
+    """
+    # Remove filename, keep only directory path
+    parts = path.split("/")
+    parent_path = "/".join(parts[:-1])  # e.g., /Photos/2024
+
+    if not parent_path or parent_path == "/":
+        # File is at root, move directly to _dupes
+        return dupes_root_id
+
+    if parent_path in folder_cache:
+        return folder_cache[parent_path]
+
+    # Build path components (skip empty string from leading /)
+    components = [c for c in parent_path.split("/") if c]
+
+    current_parent_id = dupes_root_id
+    current_path = ""
+
+    for component in components:
+        current_path = f"{current_path}/{component}"
+
+        if current_path in folder_cache:
+            current_parent_id = folder_cache[current_path]
+            continue
+
+        # Search for existing folder
+        # Escape single quotes in folder names
+        escaped_name = component.replace("'", "\\'")
+        query = f"name = '{escaped_name}' and mimeType = 'application/vnd.google-apps.folder' and '{current_parent_id}' in parents and trashed = false"
+        results = service.files().list(q=query, fields="files(id)").execute()
+
+        if results.get("files"):
+            folder_id = results["files"][0]["id"]
+        else:
+            # Create folder
+            file_metadata = {
+                "name": component,
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": [current_parent_id],
+            }
+            folder = service.files().create(body=file_metadata, fields="id").execute()
+            folder_id = folder.get("id")
+
+        folder_cache[current_path] = folder_id
+        current_parent_id = folder_id
+
+    folder_cache[parent_path] = current_parent_id
+    return current_parent_id
+
+
+def move_file_to_dupes(service, file_id: str, target_folder_id: str) -> dict:
+    """Move a file to the target folder in _dupes.
+
+    Returns: {"success": bool, "error": str or None}
+    """
+    from googleapiclient.errors import HttpError
+    import time
+
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            # Get current parents
+            file = service.files().get(fileId=file_id, fields="parents").execute()
+            previous_parents = ",".join(file.get("parents", []))
+
+            if not previous_parents:
+                # File has no parent (orphaned), just add new parent
+                service.files().update(
+                    fileId=file_id,
+                    addParents=target_folder_id,
+                    fields="id, parents",
+                ).execute()
+            else:
+                # Move file
+                service.files().update(
+                    fileId=file_id,
+                    addParents=target_folder_id,
+                    removeParents=previous_parents,
+                    fields="id, parents",
+                ).execute()
+
+            return {"success": True, "error": None}
+        except HttpError as e:
+            if e.resp.status in (429, 403) and "rate" in str(e).lower():
+                wait_time = 2 ** attempt
+                time.sleep(wait_time)
+            else:
+                return {"success": False, "error": str(e)}
+    return {"success": False, "error": "Max retries exceeded due to rate limiting"}
+
+
+def prepare_execution_plan(delete_files: list[dict]) -> list[dict]:
+    """Prepare execution plan showing source -> destination mapping.
+
+    Returns list of:
+    {
+        "file_id": str,
+        "name": str,
+        "source_path": str,
+        "dest_path": str,  # Under _dupes
+        "size": int
+    }
+    """
+    plan = []
+    for f in delete_files:
+        source_path = f["path"]
+        # Skip files already in _dupes
+        if source_path.startswith("/_dupes/"):
+            continue
+        # Destination mirrors source under _dupes
+        dest_path = f"/_dupes{source_path}"
+        plan.append({
+            "file_id": f["id"],
+            "name": f["name"],
+            "source_path": source_path,
+            "dest_path": dest_path,
+            "size": f["size"],
+        })
+    return plan
+
+
+def save_execution_log(results: list[dict], dry_run: bool):
+    """Save execution results to JSON for audit."""
+    ensure_dirs()
+    data = {
+        "executed_at": datetime.utcnow().isoformat() + "Z",
+        "dry_run": dry_run,
+        "total_files": len(results),
+        "successful": sum(1 for r in results if r["status"] == "moved"),
+        "failed": sum(1 for r in results if r["status"] == "failed"),
+        "skipped": sum(1 for r in results if r["status"] == "skipped"),
+        "results": results,
+    }
+
+    with open(EXECUTION_LOG_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def execute_moves(dry_run: bool, progress=gr.Progress()) -> tuple[str, str]:
+    """Execute the move operation.
+
+    If dry_run=True, only prepares and displays the plan.
+    If dry_run=False, actually performs the moves.
+
+    Returns: (status_message, detailed_results)
+    """
+    # Get files to move from decisions
+    _, _, delete_files = get_export_summary()
+
+    if not delete_files:
+        return "No files to move.", ""
+
+    # Prepare plan
+    plan = prepare_execution_plan(delete_files)
+
+    if not plan:
+        return "No files to move (all already in _dupes or no valid files).", ""
+
+    if dry_run:
+        # Format dry-run output
+        lines = ["### Dry Run - Files that would be moved:\n"]
+        for item in plan[:100]:
+            lines.append(f"- `{item['source_path']}` → `{item['dest_path']}`")
+        if len(plan) > 100:
+            lines.append(f"\n... and {len(plan) - 100} more files")
+
+        total_size = sum(f["size"] for f in plan)
+        lines.append(f"\n**Total: {len(plan)} files, {format_size(total_size)}**")
+        return "Dry run complete. Review the plan above, then click Execute to move files.", "\n".join(lines)
+
+    # Actual execution
+    if not ensure_service():
+        return "Authentication failed. Please check credentials.json.", ""
+
+    progress(0, desc="Creating _dupes folder...")
+    try:
+        dupes_folder_id = get_or_create_dupes_folder(state.service)
+    except Exception as e:
+        return f"Failed to create _dupes folder: {e}", ""
+
+    folder_cache = {}
+    results = []
+    successful = 0
+    failed = 0
+    skipped = 0
+
+    for i, item in enumerate(plan):
+        progress((i + 1) / len(plan), desc=f"Moving {i + 1}/{len(plan)}: {item['name'][:30]}...")
+
+        # Check if file is already in _dupes
+        if item["source_path"].startswith("/_dupes/"):
+            skipped += 1
+            results.append({"path": item["source_path"], "status": "skipped", "reason": "already in _dupes"})
+            continue
+
+        try:
+            # Ensure target folder exists
+            target_folder_id = ensure_folder_path(
+                state.service,
+                item["source_path"],
+                dupes_folder_id,
+                folder_cache
+            )
+
+            # Move file
+            result = move_file_to_dupes(state.service, item["file_id"], target_folder_id)
+
+            if result["success"]:
+                successful += 1
+                results.append({"path": item["source_path"], "dest": item["dest_path"], "status": "moved"})
+            else:
+                failed += 1
+                results.append({"path": item["source_path"], "status": "failed", "error": result["error"]})
+        except Exception as e:
+            failed += 1
+            results.append({"path": item["source_path"], "status": "failed", "error": str(e)})
+
+    # Save execution log
+    save_execution_log(results, dry_run=False)
+
+    # Format results
+    status = f"Execution complete. **Moved:** {successful} | **Failed:** {failed} | **Skipped:** {skipped}"
+
+    lines = []
+    for r in results[:50]:
+        if r["status"] == "moved":
+            lines.append(f"MOVED: `{r['path']}`")
+        elif r["status"] == "skipped":
+            lines.append(f"SKIPPED: `{r['path']}` - {r.get('reason', '')}")
+        else:
+            lines.append(f"FAILED: `{r['path']}` - {r.get('error', 'Unknown error')}")
+
+    if len(results) > 50:
+        lines.append(f"\n... and {len(results) - 50} more results")
+
+    lines.append(f"\n\nExecution log saved to: `{EXECUTION_LOG_FILE}`")
+
+    return status, "\n".join(lines)
+
+
+# =============================================================================
 # Gradio UI
 # =============================================================================
 
@@ -915,7 +1188,25 @@ def create_ui():
                 export_summary = gr.Markdown()
                 export_preview = gr.Markdown()
 
-                export_btn = gr.Button("Export to JSON", variant="primary")
+                gr.Markdown("---")
+                gr.Markdown("### Move Duplicates to _dupes Folder")
+                gr.Markdown("Files will be moved to `/_dupes/` preserving their original folder structure. This is a non-destructive operation - files can be restored by moving them back.")
+
+                with gr.Row():
+                    dry_run_btn = gr.Button("Preview (Dry Run)", variant="secondary", scale=1)
+                    execute_btn = gr.Button("Execute Moves", variant="primary", scale=1)
+
+                confirm_checkbox = gr.Checkbox(
+                    label="I understand this will move files in my Google Drive",
+                    value=False,
+                )
+
+                execution_status = gr.Markdown()
+                execution_results = gr.Markdown()
+
+                gr.Markdown("---")
+                gr.Markdown("### Export Decisions to JSON")
+                export_btn = gr.Button("Export to JSON")
                 export_status = gr.Markdown()
                 export_file = gr.File(label="Download", visible=False)
 
@@ -926,6 +1217,27 @@ def create_ui():
                 refresh_btn.click(
                     fn=refresh_export,
                     outputs=[export_summary, export_preview],
+                )
+
+                # Dry run - shows preview without moving
+                dry_run_btn.click(
+                    fn=lambda: execute_moves(dry_run=True),
+                    outputs=[execution_status, execution_results],
+                )
+
+                # Execute - requires confirmation
+                def execute_with_confirmation(confirmed: bool):
+                    if not confirmed:
+                        return "Please check the confirmation box before executing.", ""
+                    return execute_moves(dry_run=False)
+
+                execute_btn.click(
+                    fn=execute_with_confirmation,
+                    inputs=[confirm_checkbox],
+                    outputs=[execution_status, execution_results],
+                ).then(
+                    fn=lambda: gr.update(value=False),
+                    outputs=[confirm_checkbox],
                 )
 
                 export_btn.click(
