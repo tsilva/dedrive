@@ -3,6 +3,7 @@
 
 import argparse
 import csv
+import logging
 import os
 import sys
 import time
@@ -10,45 +11,103 @@ from collections import defaultdict
 from pathlib import Path
 
 from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from config import get_exclude_paths
+from config import get_exclude_paths, get_credentials_path, get_token_path, get_output_dir
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 SCOPES = [
     "https://www.googleapis.com/auth/drive",  # Full access for move operations
 ]
-TOKEN_FILE = "token.json"
-CREDENTIALS_FILE = "credentials.json"
 
 
-def authenticate(credentials_file: str) -> Credentials:
-    """Handle OAuth authentication flow."""
+def setup_logging(verbose: bool = False, log_file: str = None):
+    """Configure logging for the application.
+
+    Args:
+        verbose: If True, set level to DEBUG; otherwise INFO.
+        log_file: Optional path to write logs to a file.
+    """
+    level = logging.DEBUG if verbose else logging.INFO
+    format_str = "%(asctime)s [%(levelname)s] %(message)s"
+    date_format = "%Y-%m-%d %H:%M:%S"
+
+    handlers = [logging.StreamHandler()]
+    if log_file:
+        handlers.append(logging.FileHandler(log_file))
+
+    logging.basicConfig(
+        level=level,
+        format=format_str,
+        datefmt=date_format,
+        handlers=handlers,
+    )
+
+
+def authenticate(credentials_path: Path) -> Credentials:
+    """Handle OAuth authentication flow.
+
+    Args:
+        credentials_path: Path to the OAuth credentials JSON file.
+
+    Returns:
+        Valid Google OAuth credentials.
+
+    Raises:
+        SystemExit: If credentials file is missing.
+    """
     creds = None
-    token_path = Path(credentials_file).parent / TOKEN_FILE
+    token_path = get_token_path(credentials_path)
 
     if token_path.exists():
+        logger.debug(f"Loading existing token from {token_path}")
         creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                logger.debug("Refreshing expired token")
+                creds.refresh(Request())
+            except RefreshError as e:
+                logger.error(f"Failed to refresh OAuth token: {e}")
+                logger.error("")
+                logger.error("Your token may have been revoked or expired.")
+                logger.error(f"Delete {token_path} and re-authenticate.")
+                sys.exit(1)
         else:
-            if not Path(credentials_file).exists():
-                print(f"Error: {credentials_file} not found.")
-                print("Download OAuth credentials from Google Cloud Console:")
-                print("  1. Go to https://console.cloud.google.com/apis/credentials")
-                print("  2. Create OAuth 2.0 Client ID (Desktop app)")
-                print("  3. Download JSON and save as credentials.json")
+            if not credentials_path.exists():
+                logger.error(f"OAuth credentials not found at {credentials_path}")
+                logger.error("")
+                logger.error("To fix this:")
+                logger.error("  1. Go to https://console.cloud.google.com/apis/credentials")
+                logger.error("  2. Create a project (if you haven't already)")
+                logger.error("  3. Enable the Google Drive API")
+                logger.error("  4. Create OAuth 2.0 Client ID (choose 'Desktop app')")
+                logger.error("  5. Download the JSON file")
+                logger.error(f"  6. Save it as: {credentials_path}")
+                logger.error("")
+                logger.error("Or set GDRIVE_CREDENTIALS_PATH to use a different location.")
                 sys.exit(1)
 
-            flow = InstalledAppFlow.from_client_secrets_file(credentials_file, SCOPES)
+            logger.info("Starting OAuth flow (browser will open)...")
+            flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
             creds = flow.run_local_server(port=0)
+
+        # Ensure token directory exists
+        token_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(token_path, "w") as token:
             token.write(creds.to_json())
+
+        # Set restrictive permissions (owner read/write only)
+        os.chmod(token_path, 0o600)
+        logger.debug(f"Token saved to {token_path}")
 
     return creds
 
@@ -56,17 +115,33 @@ def authenticate(credentials_file: str) -> Credentials:
 def fetch_with_retry(service, **kwargs) -> dict:
     """Fetch with exponential backoff for rate limits."""
     max_retries = 5
+    last_error = None
+
     for attempt in range(max_retries):
         try:
             return service.files().list(**kwargs).execute()
         except HttpError as e:
-            if e.resp.status in (429, 403) and "rate" in str(e).lower():
+            last_error = e
+            if e.resp.status == 401:
+                logger.error("Authentication failed. Your token may have expired.")
+                logger.error("Delete token.json and re-authenticate.")
+                raise
+            elif e.resp.status == 403:
+                if "rate" in str(e).lower():
+                    wait_time = 2**attempt
+                    logger.warning(f"Rate limited, waiting {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error("Access denied. Check that you have permission to access Google Drive.")
+                    raise
+            elif e.resp.status == 429:
                 wait_time = 2**attempt
-                print(f"Rate limited, waiting {wait_time}s...")
+                logger.warning(f"Rate limited, waiting {wait_time}s...")
                 time.sleep(wait_time)
             else:
                 raise
-    raise Exception("Max retries exceeded due to rate limiting")
+
+    raise HttpError(last_error.resp, last_error.content, "Max retries exceeded due to rate limiting")
 
 
 def fetch_all_files(service) -> list[dict]:
@@ -92,7 +167,7 @@ def fetch_all_files(service) -> list[dict]:
 
         files = response.get("files", [])
         all_files.extend(files)
-        print(f"  Page {page_count}: fetched {len(files)} items (total: {len(all_files)})")
+        logger.info(f"  Page {page_count}: fetched {len(files)} items (total: {len(all_files)})")
 
         page_token = response.get("nextPageToken")
         if not page_token:
@@ -187,7 +262,7 @@ def filter_excluded_paths(
             result.append(file)
 
     if excluded_count > 0:
-        print(f"Excluded {excluded_count} files matching exclude patterns")
+        logger.info(f"Excluded {excluded_count} files matching exclude patterns")
 
     return result
 
@@ -295,58 +370,105 @@ def main():
         "Also reads from config.json and GDRIVE_EXCLUDE_PATHS env var.",
     )
     parser.add_argument(
-        "--output", "-o", default=".output/duplicates.csv", help="Output CSV file"
+        "--output", "-o", help="Output CSV file (default: <output_dir>/duplicates.csv)"
     )
     parser.add_argument(
         "--credentials",
         "-c",
-        default=CREDENTIALS_FILE,
-        help="OAuth credentials file",
+        help="OAuth credentials file (default: credentials.json or GDRIVE_CREDENTIALS_PATH)",
+    )
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Validate credentials and exit without scanning",
+    )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Enable verbose/debug logging",
+    )
+    parser.add_argument(
+        "--log-file",
+        help="Write logs to file (in addition to console)",
     )
     args = parser.parse_args()
 
-    print("Authenticating with Google Drive...")
-    creds = authenticate(args.credentials)
+    # Setup logging first
+    setup_logging(verbose=args.verbose, log_file=args.log_file)
+
+    # Resolve paths using config system
+    credentials_path = get_credentials_path(args.credentials)
+    output_dir = get_output_dir()
+
+    # Determine output file
+    if args.output:
+        output_file = Path(args.output)
+    else:
+        output_file = output_dir / "duplicates.csv"
+
+    # Ensure output directory exists
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    logger.info("Authenticating with Google Drive...")
+    creds = authenticate(credentials_path)
     service = build("drive", "v3", credentials=creds)
 
-    print("Fetching files from Google Drive...")
-    files = fetch_all_files(service)
-    print(f"Found {len(files)} items total")
+    # Validate-only mode: test credentials and exit
+    if args.validate:
+        try:
+            about = service.about().get(fields="user(displayName, emailAddress)").execute()
+            user = about.get("user", {})
+            email = user.get("emailAddress", "unknown")
+            name = user.get("displayName", "")
+            logger.info(f"Credentials valid. Connected as: {name} <{email}>")
+            sys.exit(0)
+        except Exception as e:
+            logger.error(f"Credential validation failed: {e}")
+            sys.exit(1)
 
-    print("Building path index...")
+    logger.info("Fetching files from Google Drive...")
+    files = fetch_all_files(service)
+    logger.info(f"Found {len(files)} items total")
+
+    logger.info("Building path index...")
     files_by_id, path_cache = build_lookups(files)
 
     if args.path:
-        print(f"Filtering to path: {args.path}")
+        logger.info(f"Filtering to path: {args.path}")
         files = filter_by_path(files, args.path, files_by_id, path_cache)
-        print(f"Filtered to {len(files)} items")
+        logger.info(f"Filtered to {len(files)} items")
 
     # Combine exclude paths from CLI args, config file, and env var
-    exclude_paths = list(args.exclude) + get_exclude_paths()
+    exclude_paths = get_exclude_paths(args.exclude)
     if exclude_paths:
-        print(f"Excluding paths: {exclude_paths}")
+        logger.info(f"Excluding paths: {exclude_paths}")
         files = filter_excluded_paths(files, exclude_paths, files_by_id, path_cache)
-        print(f"After exclusions: {len(files)} items")
+        logger.info(f"After exclusions: {len(files)} items")
 
-    print("Finding duplicates...")
+    logger.info("Finding duplicates...")
     duplicates, skipped = find_duplicates(files)
 
     if skipped > 0:
-        print(f"Skipped {skipped} Google Workspace files (Docs, Sheets, etc. - no MD5)")
+        logger.info(f"Skipped {skipped} Google Workspace files (Docs, Sheets, etc. - no MD5)")
 
     dup_count = sum(len(d["files"]) for d in duplicates)
     uncertain_count = sum(1 for d in duplicates if d["uncertain"])
 
-    print(f"Found {len(duplicates)} duplicate groups ({dup_count} files)")
+    logger.info(f"Found {len(duplicates)} duplicate groups ({dup_count} files)")
     if uncertain_count > 0:
-        print(f"  {uncertain_count} groups flagged as uncertain (same MD5, different size)")
+        logger.info(f"  {uncertain_count} groups flagged as uncertain (same MD5, different size)")
 
-    print(f"Writing results to {args.output}...")
-    write_csv(duplicates, args.output, files_by_id, path_cache)
+    logger.info(f"Writing results to {output_file}...")
+    write_csv(duplicates, str(output_file), files_by_id, path_cache)
 
     savings = calculate_savings(duplicates)
-    print(f"\nPotential space savings: {format_size(savings)}")
-    print("Done!")
+    logger.info(f"")
+    logger.info(f"Scan complete:")
+    logger.info(f"  Total files scanned: {len(files):,}")
+    logger.info(f"  Duplicate groups: {len(duplicates):,}")
+    logger.info(f"  Total duplicate files: {dup_count:,}")
+    logger.info(f"  Potential space savings: {format_size(savings)}")
+    logger.info(f"  Output: {output_file}")
 
 
 if __name__ == "__main__":

@@ -25,14 +25,26 @@ from main import (
     filter_by_path,
     filter_excluded_paths,
 )
-from config import get_exclude_paths
+from config import (
+    get_exclude_paths,
+    get_credentials_path,
+    get_output_dir,
+    get_dupes_folder,
+    get_batch_size,
+    get_max_preview_size,
+)
 
-# Constants
-OUTPUT_DIR = Path(".output")
-PREVIEW_CACHE_DIR = OUTPUT_DIR / "preview_cache"
-DECISIONS_FILE = OUTPUT_DIR / "decisions.json"
-SCAN_RESULTS_FILE = OUTPUT_DIR / "scan_results.json"
-MAX_PREVIEW_SIZE = 10 * 1024 * 1024  # 10MB
+# Derived paths (computed at runtime from config)
+def get_output_paths():
+    """Get output directory paths from config."""
+    output_dir = get_output_dir()
+    return {
+        "output_dir": output_dir,
+        "preview_cache": output_dir / "preview_cache",
+        "decisions_file": output_dir / "decisions.json",
+        "scan_results_file": output_dir / "scan_results.json",
+        "execution_log_file": output_dir / "execution_log.json",
+    }
 
 
 @dataclass
@@ -92,17 +104,20 @@ state = AppState()
 
 def ensure_dirs():
     """Ensure output directories exist."""
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    PREVIEW_CACHE_DIR.mkdir(exist_ok=True)
+    paths = get_output_paths()
+    paths["output_dir"].mkdir(parents=True, exist_ok=True)
+    paths["preview_cache"].mkdir(parents=True, exist_ok=True)
 
 
 def load_decisions() -> dict[str, Decision]:
     """Load decisions from JSON file."""
-    if not DECISIONS_FILE.exists():
+    decisions_file = get_output_paths()["decisions_file"]
+
+    if not decisions_file.exists():
         return {}
 
     try:
-        with open(DECISIONS_FILE) as f:
+        with open(decisions_file) as f:
             data = json.load(f)
 
         decisions = {}
@@ -115,6 +130,9 @@ def load_decisions() -> dict[str, Decision]:
                 decided_at=d.get("decided_at", ""),
             )
         return decisions
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON in decisions file: {e}")
+        return {}
     except Exception as e:
         print(f"Error loading decisions: {e}")
         return {}
@@ -123,6 +141,7 @@ def load_decisions() -> dict[str, Decision]:
 def save_decisions(decisions: dict[str, Decision], scan_info: dict = None):
     """Save decisions to JSON file."""
     ensure_dirs()
+    decisions_file = get_output_paths()["decisions_file"]
 
     # Calculate statistics
     decided = sum(1 for d in decisions.values() if d.action != "skip")
@@ -142,13 +161,14 @@ def save_decisions(decisions: dict[str, Decision], scan_info: dict = None):
         "decisions": {md5: asdict(d) for md5, d in decisions.items()},
     }
 
-    with open(DECISIONS_FILE, "w") as f:
+    with open(decisions_file, "w") as f:
         json.dump(data, f, indent=2)
 
 
 def save_scan_results(duplicate_groups: list[DuplicateGroup], all_files: list[dict], scan_path: str = None):
     """Save scan results to JSON file for reuse across sessions."""
     ensure_dirs()
+    scan_results_file = get_output_paths()["scan_results_file"]
 
     data = {
         "version": "1.0",
@@ -166,19 +186,21 @@ def save_scan_results(duplicate_groups: list[DuplicateGroup], all_files: list[di
         "files_by_id": {f["id"]: f for f in all_files},
     }
 
-    with open(SCAN_RESULTS_FILE, "w") as f:
+    with open(scan_results_file, "w") as f:
         json.dump(data, f, indent=2)
 
-    print(f"Scan results saved to {SCAN_RESULTS_FILE}")
+    print(f"Scan results saved to {scan_results_file}")
 
 
 def load_scan_results() -> bool:
     """Load scan results from JSON file. Returns True if loaded successfully."""
-    if not SCAN_RESULTS_FILE.exists():
+    scan_results_file = get_output_paths()["scan_results_file"]
+
+    if not scan_results_file.exists():
         return False
 
     try:
-        with open(SCAN_RESULTS_FILE) as f:
+        with open(scan_results_file) as f:
             data = json.load(f)
 
         # Restore duplicate groups
@@ -202,9 +224,12 @@ def load_scan_results() -> bool:
         state.current_index = 0
         apply_filter()
 
-        print(f"Loaded {len(state.duplicate_groups)} duplicate groups from {SCAN_RESULTS_FILE}")
+        print(f"Loaded {len(state.duplicate_groups)} duplicate groups from {scan_results_file}")
         return True
 
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON in scan results file: {e}")
+        return False
     except Exception as e:
         print(f"Error loading scan results: {e}")
         return False
@@ -269,18 +294,30 @@ def ensure_service():
     if state.service:
         return True
     try:
-        creds = authenticate("credentials.json")
+        credentials_path = get_credentials_path()
+        creds = authenticate(credentials_path)
         state.service = build("drive", "v3", credentials=creds)
         return True
+    except SystemExit:
+        # authenticate() calls sys.exit on missing credentials
+        return False
+    except FileNotFoundError as e:
+        print(f"Credentials file not found: {e}")
+        return False
+    except PermissionError as e:
+        print(f"Cannot read credentials file: {e}")
+        return False
     except Exception as e:
-        print(f"Authentication failed: {e}")
+        print(f"Authentication failed: {type(e).__name__}: {e}")
         return False
 
 
 def download_file(file_id: str) -> Optional[Path]:
     """Download a file from Google Drive and cache it."""
+    from googleapiclient.errors import HttpError
+
     # Check cache first (before authentication)
-    cache_path = PREVIEW_CACHE_DIR / file_id
+    cache_path = get_output_paths()["preview_cache"] / file_id
     if cache_path.exists():
         return cache_path
 
@@ -300,14 +337,26 @@ def download_file(file_id: str) -> Optional[Path]:
         ensure_dirs()
         cache_path.write_bytes(fh.getvalue())
         return cache_path
+    except HttpError as e:
+        if e.resp.status == 404:
+            print(f"File not found: {file_id}")
+        elif e.resp.status == 403:
+            print(f"Access denied to file: {file_id}")
+        else:
+            print(f"HTTP error downloading file {file_id}: {e.resp.status}")
+        return None
+    except IOError as e:
+        print(f"Error saving file to cache: {e}")
+        return None
     except Exception as e:
-        print(f"Error downloading file {file_id}: {e}")
+        print(f"Error downloading file {file_id}: {type(e).__name__}: {e}")
         return None
 
 
 def get_preview(file_info: FileInfo) -> tuple[str, any]:
     """Get preview for a file. Returns (type, content)."""
-    if file_info.size > MAX_PREVIEW_SIZE:
+    max_preview_size = get_max_preview_size()
+    if file_info.size > max_preview_size:
         return ("text", f"File too large for preview ({format_size(file_info.size)})")
 
     mime = file_info.mime_type
@@ -359,20 +408,33 @@ def get_preview(file_info: FileInfo) -> tuple[str, any]:
 
 def run_scan(path_filter: str, progress=gr.Progress()):
     """Run the duplicate scan."""
+    from googleapiclient.errors import HttpError
+
     ensure_dirs()
 
     progress(0, desc="Authenticating...")
     try:
-        creds = authenticate("credentials.json")
+        credentials_path = get_credentials_path()
+        creds = authenticate(credentials_path)
         state.service = build("drive", "v3", credentials=creds)
+    except SystemExit:
+        return "Authentication failed: credentials.json not found. See terminal for setup instructions.", "", ""
+    except FileNotFoundError:
+        return "Authentication failed: credentials file not found.", "", ""
     except Exception as e:
-        return f"Authentication failed: {e}", "", ""
+        return f"Authentication failed: {type(e).__name__}: {e}", "", ""
 
     progress(0.1, desc="Fetching files from Google Drive...")
     try:
         state.all_files = fetch_all_files(state.service)
+    except HttpError as e:
+        if e.resp.status == 401:
+            return "Session expired. Delete token.json and restart.", "", ""
+        elif e.resp.status == 403:
+            return "Access denied. Check your Google Drive permissions.", "", ""
+        return f"Google Drive API error: {e.resp.status} - {e.error_details}", "", ""
     except Exception as e:
-        return f"Failed to fetch files: {e}", "", ""
+        return f"Failed to fetch files: {type(e).__name__}: {e}", "", ""
 
     progress(0.5, desc="Building path index...")
     state.files_by_id, state.path_cache = build_lookups(state.all_files)
@@ -757,34 +819,37 @@ def export_decisions():
     if not state.decisions:
         return "No decisions to export.", None
 
+    decisions_file = get_output_paths()["decisions_file"]
     scan_info = {
         "total_files": len(state.all_files),
         "duplicate_groups": len(state.duplicate_groups),
     }
     save_decisions(state.decisions, scan_info)
 
-    return f"Decisions exported to: `{DECISIONS_FILE}`", str(DECISIONS_FILE)
+    return f"Decisions exported to: `{decisions_file}`", str(decisions_file)
 
 
 # =============================================================================
 # Move to _dupes Functions
 # =============================================================================
 
-EXECUTION_LOG_FILE = OUTPUT_DIR / "execution_log.json"
-
-
 def get_or_create_dupes_folder(service) -> str:
-    """Get or create the root _dupes folder. Returns folder ID."""
-    # Search for existing _dupes folder at root
-    query = "name = '_dupes' and mimeType = 'application/vnd.google-apps.folder' and 'root' in parents and trashed = false"
+    """Get or create the root dupes folder. Returns folder ID."""
+    dupes_folder = get_dupes_folder()
+    # Remove leading slash if present
+    folder_name = dupes_folder.lstrip("/")
+
+    # Search for existing dupes folder at root
+    escaped_name = folder_name.replace("\\", "\\\\").replace("'", "\\'")
+    query = f"name = '{escaped_name}' and mimeType = 'application/vnd.google-apps.folder' and 'root' in parents and trashed = false"
     results = service.files().list(q=query, fields="files(id, name)").execute()
 
     if results.get("files"):
         return results["files"][0]["id"]
 
-    # Create _dupes folder at root
+    # Create dupes folder at root
     file_metadata = {
-        "name": "_dupes",
+        "name": folder_name,
         "mimeType": "application/vnd.google-apps.folder",
     }
     folder = service.files().create(body=file_metadata, fields="id").execute()
@@ -825,8 +890,9 @@ def ensure_folder_path(service, path: str, dupes_root_id: str, folder_cache: dic
             continue
 
         # Search for existing folder
-        # Escape single quotes in folder names
-        escaped_name = component.replace("'", "\\'")
+        # Properly escape special characters for Google Drive query syntax
+        # Backslash must be escaped first, then single quotes
+        escaped_name = component.replace("\\", "\\\\").replace("'", "\\'")
         query = f"name = '{escaped_name}' and mimeType = 'application/vnd.google-apps.folder' and '{current_parent_id}' in parents and trashed = false"
         results = service.files().list(q=query, fields="files(id)").execute()
 
@@ -849,9 +915,6 @@ def ensure_folder_path(service, path: str, dupes_root_id: str, folder_cache: dic
     return current_parent_id
 
 
-BATCH_SIZE = 100  # Google Drive API limit per batch request
-
-
 def batch_get_parents(service, file_ids: list[str]) -> dict[str, str]:
     """Batch fetch parent IDs for multiple files.
 
@@ -860,6 +923,7 @@ def batch_get_parents(service, file_ids: list[str]) -> dict[str, str]:
     from googleapiclient.errors import HttpError
     import time
 
+    batch_size = get_batch_size()
     results = {}
     errors = {}
 
@@ -872,9 +936,9 @@ def batch_get_parents(service, file_ids: list[str]) -> dict[str, str]:
             parents = response.get("parents", [])
             results[file_id] = ",".join(parents)
 
-    # Process in chunks of BATCH_SIZE
-    for i in range(0, len(file_ids), BATCH_SIZE):
-        chunk = file_ids[i : i + BATCH_SIZE]
+    # Process in chunks
+    for i in range(0, len(file_ids), batch_size):
+        chunk = file_ids[i : i + batch_size]
 
         max_retries = 3
         for attempt in range(max_retries):
@@ -917,6 +981,7 @@ def batch_move_files(
     from googleapiclient.errors import HttpError
     import time
 
+    batch_size = get_batch_size()
     results = {}
 
     def callback(request_id, response, exception):
@@ -926,9 +991,9 @@ def batch_move_files(
         else:
             results[file_id] = {"success": True, "error": None}
 
-    # Process in chunks of BATCH_SIZE
-    for i in range(0, len(move_requests), BATCH_SIZE):
-        chunk = move_requests[i : i + BATCH_SIZE]
+    # Process in chunks
+    for i in range(0, len(move_requests), batch_size):
+        chunk = move_requests[i : i + batch_size]
 
         max_retries = 3
         for attempt in range(max_retries):
@@ -1020,18 +1085,23 @@ def prepare_execution_plan(delete_files: list[dict]) -> list[dict]:
         "file_id": str,
         "name": str,
         "source_path": str,
-        "dest_path": str,  # Under _dupes
+        "dest_path": str,  # Under dupes folder
         "size": int
     }
     """
+    dupes_folder = get_dupes_folder()
+    # Ensure folder starts with / for path matching
+    if not dupes_folder.startswith("/"):
+        dupes_folder = "/" + dupes_folder
+
     plan = []
     for f in delete_files:
         source_path = f["path"]
-        # Skip files already in _dupes
-        if source_path.startswith("/_dupes/"):
+        # Skip files already in dupes folder
+        if source_path.startswith(dupes_folder + "/") or source_path.startswith(dupes_folder.rstrip("/") + "/"):
             continue
-        # Destination mirrors source under _dupes
-        dest_path = f"/_dupes{source_path}"
+        # Destination mirrors source under dupes folder
+        dest_path = f"{dupes_folder}{source_path}"
         plan.append({
             "file_id": f["id"],
             "name": f["name"],
@@ -1045,6 +1115,8 @@ def prepare_execution_plan(delete_files: list[dict]) -> list[dict]:
 def save_execution_log(results: list[dict], dry_run: bool):
     """Save execution results to JSON for audit."""
     ensure_dirs()
+    execution_log_file = get_output_paths()["execution_log_file"]
+
     data = {
         "executed_at": datetime.utcnow().isoformat() + "Z",
         "dry_run": dry_run,
@@ -1055,7 +1127,7 @@ def save_execution_log(results: list[dict], dry_run: bool):
         "results": results,
     }
 
-    with open(EXECUTION_LOG_FILE, "w") as f:
+    with open(execution_log_file, "w") as f:
         json.dump(data, f, indent=2)
 
 
@@ -1110,12 +1182,17 @@ def execute_moves(dry_run: bool, progress=gr.Progress()) -> tuple[str, list]:
     failed = 0
     skipped = 0
 
-    # Filter out files already in _dupes
+    # Filter out files already in dupes folder
+    dupes_folder = get_dupes_folder()
+    if not dupes_folder.startswith("/"):
+        dupes_folder = "/" + dupes_folder
+    dupes_prefix = dupes_folder.rstrip("/") + "/"
+
     files_to_move = []
     for item in plan:
-        if item["source_path"].startswith("/_dupes/"):
+        if item["source_path"].startswith(dupes_prefix):
             skipped += 1
-            results.append({"path": item["source_path"], "status": "skipped", "reason": "already in _dupes"})
+            results.append({"path": item["source_path"], "status": "skipped", "reason": f"already in {dupes_folder}"})
         else:
             files_to_move.append(item)
 
@@ -1179,7 +1256,8 @@ def execute_moves(dry_run: bool, progress=gr.Progress()) -> tuple[str, list]:
     save_execution_log(results, dry_run=False)
 
     # Format results as table data
-    status = f"Execution complete. **Moved:** {successful} | **Failed:** {failed} | **Skipped:** {skipped} | Log saved to: `{EXECUTION_LOG_FILE}`"
+    execution_log_file = get_output_paths()["execution_log_file"]
+    status = f"Execution complete. **Moved:** {successful} | **Failed:** {failed} | **Skipped:** {skipped} | Log saved to: `{execution_log_file}`"
 
     table_data = []
     for r in results:

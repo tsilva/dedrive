@@ -3,14 +3,41 @@
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 
 # Load .env file if present
 load_dotenv()
 
+# Default configuration values
+DEFAULTS = {
+    "credentials_path": "credentials.json",
+    "token_path": "token.json",
+    "output_dir": ".output",
+    "dupes_folder": "/_dupes",
+    "batch_size": 100,
+    "max_preview_mb": 10,
+    "exclude_paths": [],
+}
+
+# Environment variable names
+ENV_VARS = {
+    "credentials_path": "GDRIVE_CREDENTIALS_PATH",
+    "token_path": "GDRIVE_TOKEN_PATH",
+    "output_dir": "GDRIVE_OUTPUT_DIR",
+    "dupes_folder": "GDRIVE_DUPES_FOLDER",
+    "batch_size": "GDRIVE_BATCH_SIZE",
+    "max_preview_mb": "GDRIVE_MAX_PREVIEW_MB",
+    "exclude_paths": "GDRIVE_EXCLUDE_PATHS",
+}
+
 CONFIG_FILE = "config.json"
-ENV_EXCLUDE_PATHS = "GDRIVE_EXCLUDE_PATHS"
+
+
+def expand_path(path: str) -> Path:
+    """Expand ~ and environment variables in path."""
+    return Path(os.path.expanduser(os.path.expandvars(path)))
 
 
 def load_config() -> dict:
@@ -20,22 +47,121 @@ def load_config() -> dict:
         try:
             with open(config_path) as f:
                 return json.load(f)
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON in {CONFIG_FILE}: {e}")
+            print(f"Please fix the syntax in {CONFIG_FILE} or delete it to use defaults.")
+        except PermissionError:
+            print(f"Error: Cannot read {CONFIG_FILE} - permission denied.")
         except Exception as e:
             print(f"Warning: Failed to load {CONFIG_FILE}: {e}")
     return {}
 
 
-def get_exclude_paths() -> list[str]:
-    """Get exclude paths from config file and environment variable.
+def get_config_value(key: str, cli_value: Any = None) -> Any:
+    """Get configuration value with precedence: CLI > ENV > config file > default.
+
+    Args:
+        key: Configuration key (e.g., 'credentials_path')
+        cli_value: Value from CLI argument (highest precedence if not None)
+
+    Returns:
+        Configuration value from highest precedence source.
+    """
+    # CLI argument has highest precedence
+    if cli_value is not None:
+        return cli_value
+
+    # Environment variable
+    env_var = ENV_VARS.get(key)
+    if env_var:
+        env_value = os.environ.get(env_var)
+        if env_value is not None:
+            # Handle type conversion
+            if key == "batch_size":
+                try:
+                    return int(env_value)
+                except ValueError:
+                    print(f"Warning: Invalid {env_var} value '{env_value}', using default.")
+            elif key == "max_preview_mb":
+                try:
+                    return int(env_value)
+                except ValueError:
+                    print(f"Warning: Invalid {env_var} value '{env_value}', using default.")
+            else:
+                return env_value
+
+    # Config file
+    config = load_config()
+    if key in config:
+        return config[key]
+
+    # Default
+    return DEFAULTS.get(key)
+
+
+def get_credentials_path(cli_value: str = None) -> Path:
+    """Get credentials file path."""
+    path = get_config_value("credentials_path", cli_value)
+    return expand_path(path)
+
+
+def get_token_path(credentials_path: Path = None) -> Path:
+    """Get token file path.
+
+    By default, token.json is stored next to credentials.json.
+    Can be overridden via GDRIVE_TOKEN_PATH or config file.
+    """
+    explicit_path = get_config_value("token_path")
+
+    # If explicitly set (not default), use that
+    if explicit_path != DEFAULTS["token_path"]:
+        return expand_path(explicit_path)
+
+    # Otherwise, store next to credentials file
+    if credentials_path:
+        return credentials_path.parent / "token.json"
+
+    return Path("token.json")
+
+
+def get_output_dir() -> Path:
+    """Get output directory path."""
+    path = get_config_value("output_dir")
+    return expand_path(path)
+
+
+def get_dupes_folder() -> str:
+    """Get the name of the dupes folder in Google Drive."""
+    return get_config_value("dupes_folder")
+
+
+def get_batch_size() -> int:
+    """Get batch size for API operations."""
+    return get_config_value("batch_size")
+
+
+def get_max_preview_size() -> int:
+    """Get max preview size in bytes."""
+    mb = get_config_value("max_preview_mb")
+    return mb * 1024 * 1024
+
+
+def get_exclude_paths(cli_excludes: list[str] = None) -> list[str]:
+    """Get exclude paths from CLI, config file, and environment variable.
 
     Sources (combined):
-    1. Config file: config.json with "exclude_paths" array
-    2. Environment variable: GDRIVE_EXCLUDE_PATHS (comma-separated paths)
+    1. CLI arguments (--exclude flags)
+    2. Config file: config.json with "exclude_paths" array
+    3. Environment variable: GDRIVE_EXCLUDE_PATHS (comma-separated paths)
 
     Returns:
         List of paths to exclude from scans.
     """
     exclude_paths = []
+
+    # CLI arguments
+    if cli_excludes:
+        exclude_paths.extend(cli_excludes)
 
     # Load from config file
     config = load_config()
@@ -44,7 +170,8 @@ def get_exclude_paths() -> list[str]:
         exclude_paths.extend(file_paths)
 
     # Load from environment variable (comma-separated)
-    env_paths = os.environ.get(ENV_EXCLUDE_PATHS, "")
+    env_var = ENV_VARS.get("exclude_paths")
+    env_paths = os.environ.get(env_var, "")
     if env_paths:
         for path in env_paths.split(","):
             path = path.strip()
@@ -55,6 +182,9 @@ def get_exclude_paths() -> list[str]:
     normalized = []
     for path in exclude_paths:
         path = path.strip()
+        # Skip comment lines in config
+        if path.startswith("#"):
+            continue
         if not path.startswith("/"):
             path = "/" + path
         path = path.rstrip("/")
@@ -65,12 +195,18 @@ def get_exclude_paths() -> list[str]:
 
 
 def create_default_config():
-    """Create a default config file with example exclude paths."""
+    """Create a default config file with all available options."""
     default_config = {
+        "# credentials_path": "~/.config/gdrive-deduper/credentials.json",
+        "# token_path": "~/.config/gdrive-deduper/token.json",
+        "# output_dir": ".output",
+        "# dupes_folder": "/_dupes",
+        "# batch_size": 100,
+        "# max_preview_mb": 10,
         "exclude_paths": [
             "# Add paths to exclude from scans, e.g.:",
-            "# /documentor-puzzle/export",
-            "# /Backup/Old"
+            "# /Backup/Old",
+            "# /tmp"
         ]
     }
 
@@ -79,3 +215,15 @@ def create_default_config():
         with open(config_path, "w") as f:
             json.dump(default_config, f, indent=2)
         print(f"Created default config file: {CONFIG_FILE}")
+
+
+def print_config():
+    """Print current configuration for debugging."""
+    print("Current configuration:")
+    print(f"  credentials_path: {get_credentials_path()}")
+    print(f"  token_path: {get_token_path(get_credentials_path())}")
+    print(f"  output_dir: {get_output_dir()}")
+    print(f"  dupes_folder: {get_dupes_folder()}")
+    print(f"  batch_size: {get_batch_size()}")
+    print(f"  max_preview_mb: {get_config_value('max_preview_mb')}")
+    print(f"  exclude_paths: {get_exclude_paths()}")

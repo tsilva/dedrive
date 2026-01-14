@@ -25,39 +25,66 @@ uv run main.py --output .output/custom.csv
 
 # Use different credentials file (CLI)
 uv run main.py --credentials path/to/creds.json
+
+# Validate credentials without scanning
+uv run main.py --validate
+
+# Enable verbose/debug logging
+uv run main.py --verbose
+
+# Write logs to file
+uv run main.py --log-file debug.log
 ```
 
 **Note:** PDF preview in the web UI requires poppler: `brew install poppler` (macOS)
 
 ## Configuration
 
-### Exclude Paths
+All settings can be configured via environment variables, `config.json`, or CLI arguments. Precedence: CLI > ENV > config file > defaults.
 
-Folders can be excluded from scans using three methods (combined):
+### Environment Variables
 
-1. **CLI argument:** `--exclude "/path/to/exclude"` (can specify multiple times)
-2. **Config file:** Create `config.json` with an `exclude_paths` array
-3. **Environment variable:** Set `GDRIVE_EXCLUDE_PATHS` (comma-separated paths)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GDRIVE_CREDENTIALS_PATH` | `credentials.json` | Path to OAuth credentials file |
+| `GDRIVE_TOKEN_PATH` | (next to credentials) | Path to OAuth token file |
+| `GDRIVE_OUTPUT_DIR` | `.output` | Directory for output files |
+| `GDRIVE_DUPES_FOLDER` | `/_dupes` | Folder name for duplicates in Drive |
+| `GDRIVE_BATCH_SIZE` | `100` | Batch size for API operations |
+| `GDRIVE_MAX_PREVIEW_MB` | `10` | Max file size for previews (MB) |
+| `GDRIVE_EXCLUDE_PATHS` | (none) | Comma-separated paths to exclude |
 
-Example `config.json`:
+### Config File
+
+Create `config.json` in the project root:
+
 ```json
 {
+  "credentials_path": "~/.config/gdrive-deduper/credentials.json",
+  "output_dir": "~/.local/share/gdrive-deduper",
+  "dupes_folder": "/_dupes",
+  "batch_size": 100,
+  "max_preview_mb": 10,
   "exclude_paths": [
-    "/documentor-puzzle/export",
     "/Backup/Old",
     "/tmp"
   ]
 }
 ```
 
-Example `.env` file (recommended):
+Paths support `~` expansion for home directory.
+
+### Exclude Paths
+
+Folders can be excluded from scans using three methods (combined):
+
+1. **CLI argument:** `--exclude "/path/to/exclude"` (can specify multiple times)
+2. **Config file:** Add `exclude_paths` array to `config.json`
+3. **Environment variable:** Set `GDRIVE_EXCLUDE_PATHS` (comma-separated)
+
+Example `.env` file:
 ```
 GDRIVE_EXCLUDE_PATHS=/documentor-puzzle/export,/Backup/Old
-```
-
-Or via shell environment variable:
-```bash
-export GDRIVE_EXCLUDE_PATHS="/documentor-puzzle/export,/Backup/Old"
 ```
 
 ## Architecture
