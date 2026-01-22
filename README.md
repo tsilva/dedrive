@@ -5,7 +5,7 @@
   [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
   [![Google Drive API](https://img.shields.io/badge/Google%20Drive-API%20v3-4285F4?logo=googledrive&logoColor=white)](https://developers.google.com/drive)
 
-  **Find and manage duplicate files in Google Drive using MD5 checksums**
+  **🔍 Find and manage duplicate files in Google Drive using MD5 checksums 🗑️**
 
   [Features](#features) · [Quick Start](#quick-start) · [Configuration](#configuration) · [Usage](#usage)
 </div>
