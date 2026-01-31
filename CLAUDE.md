@@ -34,13 +34,25 @@ uv run main.py --verbose
 
 # Write logs to file
 uv run main.py --log-file debug.log
+
+# Create a profile (for multiple Google accounts)
+uv run main.py --init-profile work
+
+# List profiles
+uv run main.py --list-profiles
+
+# Run scan with a profile
+uv run main.py --profile work
+
+# Profile with other flags
+uv run main.py --profile work --path "/Photos" --verbose
 ```
 
 **Note:** PDF preview in the web UI requires poppler: `brew install poppler` (macOS)
 
 ## Configuration
 
-All settings can be configured via environment variables, `config.json`, or CLI arguments. Precedence: CLI > ENV > config file > defaults.
+All settings can be configured via environment variables, `config.json`, CLI arguments, or profiles. Precedence: CLI > profile config.yaml > ENV > config.json > defaults.
 
 ### Environment Variables
 
@@ -86,6 +98,33 @@ Example `.env` file:
 ```
 GDRIVE_EXCLUDE_PATHS=/documentor-puzzle/export,/Backup/Old
 ```
+
+### Profiles
+
+Profiles allow targeting multiple Google Drive accounts. Each profile is a subfolder under `./profiles/` with its own credentials, token, config, and output data.
+
+```
+profiles/
+  work/
+    config.yaml        # Profile settings (YAML)
+    credentials.json   # OAuth client credentials
+    token.json         # OAuth token (auto-generated)
+    .output/           # Scan results, decisions, logs
+```
+
+Example `config.yaml`:
+
+```yaml
+# profiles/work/config.yaml
+dupes_folder: /_dupes
+batch_size: 100
+max_preview_mb: 10
+exclude_paths:
+  - /Backup/Old
+  - /tmp
+```
+
+When `--profile <name>` is used, `config.py` resolves credentials, token, and output paths from the profile directory. Profile `config.yaml` values slot into the precedence chain between CLI args and environment variables.
 
 ## Architecture
 

@@ -7,8 +7,21 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from profiles import load_profile, get_profile_credentials_path, get_profile_token_path, get_profile_output_dir
+
 # Load .env file if present
 load_dotenv()
+
+# Active profile (set via set_active_profile)
+active_profile: str | None = None
+_profile_config: dict = {}
+
+
+def set_active_profile(name: str):
+    """Activate a profile, loading its config.yaml."""
+    global active_profile, _profile_config
+    active_profile = name
+    _profile_config = load_profile(name)
 
 # Default configuration values
 DEFAULTS = {
@@ -71,6 +84,10 @@ def get_config_value(key: str, cli_value: Any = None) -> Any:
     if cli_value is not None:
         return cli_value
 
+    # Profile config.yaml (when a profile is active)
+    if active_profile and key in _profile_config:
+        return _profile_config[key]
+
     # Environment variable
     env_var = ENV_VARS.get(key)
     if env_var:
@@ -101,6 +118,8 @@ def get_config_value(key: str, cli_value: Any = None) -> Any:
 
 def get_credentials_path(cli_value: str = None) -> Path:
     """Get credentials file path."""
+    if cli_value is None and active_profile:
+        return get_profile_credentials_path(active_profile)
     path = get_config_value("credentials_path", cli_value)
     return expand_path(path)
 
@@ -111,6 +130,9 @@ def get_token_path(credentials_path: Path = None) -> Path:
     By default, token.json is stored next to credentials.json.
     Can be overridden via GDRIVE_TOKEN_PATH or config file.
     """
+    if active_profile:
+        return get_profile_token_path(active_profile)
+
     explicit_path = get_config_value("token_path")
 
     # If explicitly set (not default), use that
@@ -126,6 +148,8 @@ def get_token_path(credentials_path: Path = None) -> Path:
 
 def get_output_dir() -> Path:
     """Get output directory path."""
+    if active_profile:
+        return get_profile_output_dir(active_profile)
     path = get_config_value("output_dir")
     return expand_path(path)
 

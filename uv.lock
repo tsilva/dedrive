@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -356,6 +356,7 @@ dependencies = [
     { name = "gradio" },
     { name = "pdf2image" },
     { name = "python-dotenv" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
@@ -366,6 +367,7 @@ requires-dist = [
     { name = "gradio", specifier = ">=4.0.0" },
     { name = "pdf2image", specifier = ">=1.16.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [[package]]

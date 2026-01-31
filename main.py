@@ -17,7 +17,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from config import get_exclude_paths, get_credentials_path, get_token_path, get_output_dir
+from config import get_exclude_paths, get_credentials_path, get_token_path, get_output_dir, set_active_profile
+from profiles import init_profile, list_profiles
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -383,6 +384,20 @@ def main():
         help="Validate credentials and exit without scanning",
     )
     parser.add_argument(
+        "--profile", "-P",
+        help="Use a named profile (reads config/credentials from profiles/<name>/)",
+    )
+    parser.add_argument(
+        "--init-profile",
+        metavar="NAME",
+        help="Create a new profile with template config and exit",
+    )
+    parser.add_argument(
+        "--list-profiles",
+        action="store_true",
+        help="List available profiles and exit",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable verbose/debug logging",
@@ -392,6 +407,28 @@ def main():
         help="Write logs to file (in addition to console)",
     )
     args = parser.parse_args()
+
+    # Handle profile management commands
+    if args.list_profiles:
+        profiles = list_profiles()
+        if profiles:
+            print("Available profiles:")
+            for name in profiles:
+                print(f"  {name}")
+        else:
+            print("No profiles found. Create one with --init-profile <name>")
+        sys.exit(0)
+
+    if args.init_profile:
+        profile_dir = init_profile(args.init_profile)
+        print(f"Profile '{args.init_profile}' created at {profile_dir}")
+        print(f"  Copy your credentials.json into {profile_dir}/")
+        print(f"  Edit {profile_dir / 'config.yaml'} to customize settings")
+        sys.exit(0)
+
+    # Activate profile if specified
+    if args.profile:
+        set_active_profile(args.profile)
 
     # Setup logging first
     setup_logging(verbose=args.verbose, log_file=args.log_file)

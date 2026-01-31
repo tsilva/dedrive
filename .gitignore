@@ -254,6 +254,10 @@ Thumbs.db
 *.swp
 *.swo
 
+# Profiles (contain credentials) - only allow example
+profiles/*
+!profiles/example/
+
 # Claude Code
 .claude-sandbox.json
 *.code-workspace

@@ -20,6 +20,7 @@
 - **Preserves structure** - Original folder hierarchy is maintained under the dupes folder
 - **Resumable sessions** - Decisions auto-save and persist across sessions
 - **Flexible filtering** - Scan specific paths and exclude folders from analysis
+- **Multi-account profiles** - Target different Google Drive accounts with named profiles
 
 ## Quick Start
 
@@ -74,6 +75,11 @@ uv run main.py --validate
 
 # Debug logging
 uv run main.py --verbose --log-file debug.log
+
+# Profiles (multiple Google accounts)
+uv run main.py --init-profile work
+uv run main.py --list-profiles
+uv run main.py --profile work
 ```
 
 ### Web UI
@@ -109,7 +115,7 @@ Instead of deleting, duplicates are moved to `/_dupes` at Drive root:
 
 Settings can be configured via environment variables, `config.json`, or CLI arguments.
 
-**Precedence:** CLI > Environment > Config file > Defaults
+**Precedence:** CLI > Profile config.yaml > Environment > Config file > Defaults
 
 ### Environment Variables
 
@@ -136,6 +142,23 @@ Create `config.json` in the project root:
   "exclude_paths": ["/Backup/Old", "/tmp"]
 }
 ```
+
+### Profiles
+
+Use profiles to manage multiple Google Drive accounts:
+
+```bash
+# Create a profile
+uv run main.py --init-profile work
+
+# Copy credentials into the profile
+cp ~/Downloads/credentials.json profiles/work/
+
+# Use the profile
+uv run main.py --profile work
+```
+
+Each profile stores its own `credentials.json`, `token.json`, `config.yaml`, and `.output/` under `profiles/<name>/`.
 
 ## Output Files
 
