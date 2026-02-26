@@ -70,11 +70,15 @@ def authenticate(credentials_path: Path) -> Credentials:
                 logger.debug("Refreshing expired token")
                 creds.refresh(Request())
             except RefreshError as e:
-                logger.error(f"Failed to refresh OAuth token: {e}")
-                logger.error("")
-                logger.error("Your token may have been revoked or expired.")
-                logger.error(f"Delete {token_path} and re-authenticate.")
-                sys.exit(1)
+                logger.warning(f"Token refresh failed: {e}")
+                logger.info("Token expired or revoked. Re-authenticating...")
+                token_path.unlink(missing_ok=True)
+                if not credentials_path.exists():
+                    logger.error(f"OAuth credentials not found at {credentials_path}")
+                    logger.error("Cannot re-authenticate without credentials file.")
+                    sys.exit(1)
+                flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
+                creds = flow.run_local_server(port=0)
         else:
             if not credentials_path.exists():
                 logger.error(f"OAuth credentials not found at {credentials_path}")
