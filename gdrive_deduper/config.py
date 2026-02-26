@@ -7,7 +7,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from profiles import load_profile, get_profile_credentials_path, get_profile_token_path, get_profile_output_dir
+from gdrive_deduper.profiles import load_profile, get_profile_credentials_path, get_profile_token_path, get_profile_output_dir
 
 # Load .env file if present
 load_dotenv()

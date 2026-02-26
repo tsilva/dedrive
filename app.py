@@ -12,8 +12,7 @@ import gradio as gr
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-# Import from main.py
-from main import (
+from gdrive_deduper import (
     SCOPES,
     authenticate,
     fetch_all_files,
@@ -24,8 +23,6 @@ from main import (
     format_size,
     filter_by_path,
     filter_excluded_paths,
-)
-from config import (
     get_exclude_paths,
     get_credentials_path,
     get_output_dir,
