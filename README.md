@@ -28,11 +28,8 @@
 # Install with uv
 uv sync
 
-# Run a scan (CLI)
+# Launch the web UI
 uv run main.py
-
-# Or launch the web UI
-uv run app.py
 ```
 
 **First run:** A browser window will open for Google OAuth authentication. Grant access to your Google Drive.
@@ -85,7 +82,7 @@ uv run main.py --profile work
 ### Web UI
 
 ```bash
-uv run app.py
+uv run main.py
 ```
 
 The web interface provides three tabs:

@@ -8,26 +8,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies
 uv sync
 
-# Run the web UI (Gradio-based deduplication manager)
-uv run app.py
-
-# Run the CLI deduplication scan
+# Launch the Gradio web UI (main entry point)
 uv run main.py
 
-# Scan specific folder (CLI)
-uv run main.py --path "/Photos"
+# Launch on a custom port
+uv run main.py --port 8080
 
-# Exclude folders from scan (CLI)
-uv run main.py --exclude "/Backup/Old" --exclude "/tmp"
-
-# Custom output file (CLI)
-uv run main.py --output .output/custom.csv
-
-# Use different credentials file (CLI)
-uv run main.py --credentials path/to/creds.json
-
-# Validate credentials without scanning
-uv run main.py --validate
+# Enable public sharing link
+uv run main.py --share
 
 # Enable verbose/debug logging
 uv run main.py --verbose
@@ -35,24 +23,27 @@ uv run main.py --verbose
 # Write logs to file
 uv run main.py --log-file debug.log
 
+# Validate credentials without launching UI
+uv run main.py --validate
+
 # Create a profile (for multiple Google accounts)
 uv run main.py --init-profile work
 
 # List profiles
 uv run main.py --list-profiles
 
-# Run scan with a profile
+# Launch with a profile active
 uv run main.py --profile work
 
 # Profile with other flags
-uv run main.py --profile work --path "/Photos" --verbose
+uv run main.py --profile work --verbose --port 8080
 ```
 
 **Note:** PDF preview in the web UI requires poppler: `brew install poppler` (macOS)
 
 ## Configuration
 
-All settings can be configured via environment variables, `config.json`, CLI arguments, or profiles. Precedence: CLI > profile config.yaml > ENV > config.json > defaults.
+All settings can be configured via environment variables, `config.json`, or profiles. Precedence: profile config.yaml > ENV > config.json > defaults.
 
 ### Environment Variables
 
@@ -88,11 +79,10 @@ Paths support `~` expansion for home directory.
 
 ### Exclude Paths
 
-Folders can be excluded from scans using three methods (combined):
+Folders can be excluded from scans using two methods (combined):
 
-1. **CLI argument:** `--exclude "/path/to/exclude"` (can specify multiple times)
-2. **Config file:** Add `exclude_paths` array to `config.json`
-3. **Environment variable:** Set `GDRIVE_EXCLUDE_PATHS` (comma-separated)
+1. **Config file:** Add `exclude_paths` array to `config.json`
+2. **Environment variable:** Set `GDRIVE_EXCLUDE_PATHS` (comma-separated)
 
 Example `.env` file:
 ```
@@ -128,25 +118,13 @@ When `--profile <name>` is used, `config.py` resolves credentials, token, and ou
 
 ## Architecture
 
-Two interfaces for finding and managing duplicate files in Google Drive:
-
-### CLI Tool (`main.py`)
-Fast scanning tool that outputs duplicate pairs to CSV.
-
-**Flow:**
-1. OAuth authentication (cached in `token.json`)
-2. Single paginated API call fetches all files with MD5 metadata
-3. Build in-memory path lookup from parent IDs
-4. Group files by MD5 checksum
-5. Output CSV with all duplicate pairs
-
-### Web UI (`app.py`)
-Gradio-based interface for the full deduplication workflow.
+Gradio-based web UI (`main.py`) for finding and managing duplicate files in Google Drive.
 
 **Features:**
 - **Scan Tab:** Run scans with progress feedback
 - **Review Tab:** Side-by-side file comparison with previews, make keep/skip decisions
 - **Export Tab:** Preview and execute moves, export decisions.json
+- **CLI arguments:** Profile management (`--profile`, `--init-profile`, `--list-profiles`), credential validation (`--validate`), logging (`--verbose`, `--log-file`), Gradio options (`--port`, `--share`)
 
 **Key design decisions:**
 - Uses `drive` scope (full access for file moves)
@@ -157,7 +135,7 @@ Gradio-based interface for the full deduplication workflow.
 - Decisions auto-save to `.output/decisions.json` (resume sessions)
 - File previews cached in `.output/preview_cache/`
 
-**Output:** `.output/duplicates.csv` (scan results), `.output/decisions.json` (user decisions), `.output/execution_log.json` (move results)
+**Output:** `.output/scan_results.json` (scan results), `.output/decisions.json` (user decisions), `.output/execution_log.json` (move results)
 
 ### Moving Duplicates
 
