@@ -460,7 +460,7 @@ def run_scan(progress=gr.Progress()):
 
     # Save scan results for reuse
     progress(0.95, desc="Saving scan results...")
-    save_scan_results(state.duplicate_groups, state.all_files, path_filter.strip() if path_filter else None)
+    save_scan_results(state.duplicate_groups, state.all_files)
 
     progress(1.0, desc="Done!")
 
