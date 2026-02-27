@@ -96,7 +96,6 @@ class AppState:
     current_index: int = 0
     filtered_indices: list[int] = field(default_factory=list)
     filter_status: str = "pending"
-    search_term: str = ""
 
     # Decisions
     decisions: dict[str, Decision] = field(default_factory=dict)
@@ -224,7 +223,6 @@ def load_scan_results() -> bool:
 
         # Apply default filter
         state.filter_status = "pending"
-        state.search_term = ""
         state.current_index = 0
         apply_filter()
 
@@ -265,16 +263,6 @@ def apply_filter():
             continue
         elif state.filter_status == "skipped" and (decision is None or decision.action != "skip"):
             continue
-
-        # Search filter
-        if state.search_term:
-            term = state.search_term.lower()
-            match = any(
-                term in f.path.lower() or term in f.name.lower()
-                for f in group.files
-            )
-            if not match:
-                continue
 
         state.filtered_indices.append(i)
 
@@ -422,11 +410,11 @@ def run_scan(path_filter: str, progress=gr.Progress()):
         creds = authenticate(credentials_path)
         state.service = build("drive", "v3", credentials=creds)
     except SystemExit:
-        return "Authentication failed: credentials.json not found. See terminal for setup instructions.", "", ""
+        return "Authentication failed: credentials.json not found. See terminal for setup instructions.", ""
     except FileNotFoundError:
-        return "Authentication failed: credentials file not found.", "", ""
+        return "Authentication failed: credentials file not found.", ""
     except Exception as e:
-        return f"Authentication failed: {type(e).__name__}: {e}", "", ""
+        return f"Authentication failed: {type(e).__name__}: {e}", ""
 
     progress(0.1, desc="Fetching files from Google Drive...")
     try:
@@ -436,9 +424,9 @@ def run_scan(path_filter: str, progress=gr.Progress()):
             return "Session expired. Delete token.json and restart.", "", ""
         elif e.resp.status == 403:
             return "Access denied. Check your Google Drive permissions.", "", ""
-        return f"Google Drive API error: {e.resp.status} - {e.error_details}", "", ""
+        return f"Google Drive API error: {e.resp.status} - {e.error_details}", ""
     except Exception as e:
-        return f"Failed to fetch files: {type(e).__name__}: {e}", "", ""
+        return f"Failed to fetch files: {type(e).__name__}: {e}", ""
 
     progress(0.5, desc="Building path index...")
     state.files_by_id, state.path_cache = build_lookups(state.all_files)
@@ -473,7 +461,6 @@ def run_scan(path_filter: str, progress=gr.Progress()):
 
     # Apply filter
     state.filter_status = "pending"
-    state.search_term = ""
     apply_filter()
 
     # Save scan results for reuse
@@ -507,11 +494,7 @@ def run_scan(path_filter: str, progress=gr.Progress()):
 - **Skipped:** {skipped:,} Google Workspace files (no MD5){exclude_info}
 """
 
-    decided = len(state.decisions)
-    pending = total_groups - decided
-    decisions_info = f"**Decisions loaded:** {decided:,} | **Pending:** {pending:,}"
-
-    return status, summary, decisions_info
+    return status, summary
 
 
 # =============================================================================
@@ -531,12 +514,9 @@ def format_file_metadata(file_info: FileInfo) -> str:
 **Type:** {file_info.mime_type}
 
 **ID:** `{file_info.id[:20]}...`
+
+**[Open in Drive](https://drive.google.com/file/d/{file_info.id}/view)**
 """
-
-
-def get_drive_link(file_id: str) -> str:
-    """Get Google Drive link for a file."""
-    return f"https://drive.google.com/file/d/{file_id}/view"
 
 
 def format_preview_outputs(preview_type: str, preview_content: str):
@@ -571,10 +551,8 @@ def update_review_display():
             gr.update(value=None, visible=False), gr.update(value="", visible=False),  # preview A (img, code)
             gr.update(value=None, visible=False), gr.update(value="", visible=False),  # preview B (img, code)
             "", "",  # metadata
-            "", "",  # links
             gr.update(interactive=False),  # keep left
             gr.update(interactive=False),  # keep right
-            gr.update(visible=False, choices=[("None", "none")], value="none"),  # multi-file selector
         )
 
     # Check if this group has a decision
@@ -589,80 +567,39 @@ def update_review_display():
             if kept_file:
                 decision_text = f" [KEEPING: {kept_file.name}]"
 
-    # Header
+    # Header with embedded stats
+    total_groups = len(state.duplicate_groups)
+    pending = total_groups - len(state.decisions)
+    decided = len(state.decisions)
     position = state.current_index + 1
     total = len(state.filtered_indices)
-    header = f"### Group {position:,} of {total:,} | MD5: `{group.md5[:16]}...` | {len(group.files)} files{decision_text}"
+    header = f"**Pending:** {pending:,} | **Decided:** {decided:,}\n\n### Group {position:,} of {total:,} | MD5: `{group.md5[:16]}...` | {len(group.files)} files{decision_text}"
     if group.uncertain:
         header += "\n\n**Warning:** Same MD5 but different sizes - review carefully!"
 
-    # For groups with 2 files, show side-by-side
-    if len(group.files) == 2:
-        file_a, file_b = group.files[0], group.files[1]
+    # Always show files[0] vs files[1] side-by-side
+    file_a, file_b = group.files[0], group.files[1]
 
-        # Get previews
-        preview_a_type, preview_a_content = get_preview(file_a)
-        preview_b_type, preview_b_content = get_preview(file_b)
+    # Get previews
+    preview_a_type, preview_a_content = get_preview(file_a)
+    preview_b_type, preview_b_content = get_preview(file_b)
 
-        # Format preview outputs (image and code for each side)
-        preview_img_a, preview_code_a = format_preview_outputs(preview_a_type, preview_a_content)
-        preview_img_b, preview_code_b = format_preview_outputs(preview_b_type, preview_b_content)
+    # Format preview outputs (image and code for each side)
+    preview_img_a, preview_code_a = format_preview_outputs(preview_a_type, preview_a_content)
+    preview_img_b, preview_code_b = format_preview_outputs(preview_b_type, preview_b_content)
 
-        meta_a = format_file_metadata(file_a)
-        meta_b = format_file_metadata(file_b)
+    meta_a = format_file_metadata(file_a)
+    meta_b = format_file_metadata(file_b)
 
-        link_a = get_drive_link(file_a.id)
-        link_b = get_drive_link(file_b.id)
-
-        return (
-            header,
-            file_a.path, file_b.path,  # paths
-            preview_img_a, preview_code_a,  # preview A
-            preview_img_b, preview_code_b,  # preview B
-            meta_a, meta_b,
-            link_a, link_b,
-            gr.update(interactive=True),  # keep left
-            gr.update(interactive=True),  # keep right
-            gr.update(visible=False, choices=[("None", "none")], value="none"),  # multi-file selector
-        )
-
-    # For groups with 3+ files, show selector on right side
-    else:
-        choices = [(f.path, f.id) for f in group.files]
-
-        # Default selected file (first one)
-        selected_file = group.files[0]
-        preview_type, preview_content = get_preview(selected_file)
-        preview_img_b, preview_code_b = format_preview_outputs(preview_type, preview_content)
-
-        # Left side: show all files in the group
-        all_files_list = "\n".join([f"- `{f.path}`" for f in group.files])
-        meta_a = f"**All duplicate files ({len(group.files)}):**\n\n{all_files_list}"
-
-        # Right side: preview of selected file
-        meta_b = format_file_metadata(selected_file)
-        link_b = get_drive_link(selected_file.id)
-
-        return (
-            header,
-            f"Select file to keep →", selected_file.path,  # paths
-            gr.update(value=None, visible=False), gr.update(value="", visible=False),  # preview A (hidden)
-            preview_img_b, preview_code_b,  # preview B (selected file)
-            meta_a, meta_b,
-            "", link_b,
-            gr.update(interactive=False),  # keep left (disabled for multi)
-            gr.update(interactive=True),  # keep right (keeps selected)
-            gr.update(visible=True, choices=choices, value=choices[0][1] if choices else "none"),  # multi-file selector
-        )
-
-
-def on_search(search: str):
-    """Handle search changes. Always filters to pending (undecided) items."""
-    state.filter_status = "pending"
-    state.search_term = search
-    state.current_index = 0
-    apply_filter()
-    return update_review_display()
+    return (
+        header,
+        file_a.path, file_b.path,  # paths
+        preview_img_a, preview_code_a,  # preview A
+        preview_img_b, preview_code_b,  # preview B
+        meta_a, meta_b,
+        gr.update(interactive=True),  # keep left
+        gr.update(interactive=True),  # keep right
+    )
 
 
 def on_navigate(direction: str):
@@ -671,13 +608,6 @@ def on_navigate(direction: str):
         state.current_index += 1
     elif direction == "prev" and state.current_index > 0:
         state.current_index -= 1
-    return update_review_display()
-
-
-def on_jump_to(index: int):
-    """Jump to specific index."""
-    if 1 <= index <= len(state.filtered_indices):
-        state.current_index = index - 1
     return update_review_display()
 
 
@@ -726,52 +656,12 @@ def on_keep_left():
     return make_decision("keep_left")
 
 
-def on_keep_right(selected_id: str = None):
-    """Keep the right file. For multi-file groups, uses the selected ID from dropdown."""
-    group = get_current_group()
-    if not group:
-        return update_review_display()
+def on_keep_right():
+    return make_decision("keep_right")
 
-    # For multi-file groups, use the selected ID; otherwise use files[1]
-    if len(group.files) > 2 and selected_id:
-        return make_decision("keep_specific", selected_id)
-    else:
-        return make_decision("keep_right")
-
-
-def on_multi_file_select(selected_id: str):
-    """Update preview when a file is selected in multi-file mode (shown on right/B side)."""
-    group = get_current_group()
-    if not group or not selected_id:
-        return "", gr.update(value=None, visible=False), gr.update(value="", visible=False), ""
-
-    selected_file = next((f for f in group.files if f.id == selected_id), None)
-    if not selected_file:
-        return "", gr.update(value=None, visible=False), gr.update(value="", visible=False), ""
-
-    preview_type, preview_content = get_preview(selected_file)
-    preview_img, preview_code = format_preview_outputs(preview_type, preview_content)
-
-    meta = format_file_metadata(selected_file)
-
-    return selected_file.path, preview_img, preview_code, meta
-
-
-def get_stats_display():
-    """Get statistics display for review tab."""
-    total = len(state.duplicate_groups)
-    decided = len(state.decisions)
-    pending = total - decided
-
-    return f"**Pending:** {pending:,} | **Decided:** {decided:,} | **Total:** {total:,}"
-
-
-# =============================================================================
-# Export Tab Functions
-# =============================================================================
 
 def get_export_summary():
-    """Get summary of decisions for export tab."""
+    """Get summary of decisions for execution."""
     if not state.duplicate_groups:
         return "No scan data. Run a scan first.", "", []
 
@@ -801,36 +691,11 @@ def get_export_summary():
 - **Groups with decisions:** {len(decided):,}
 - **Groups skipped:** {len(skipped):,}
 - **Groups pending:** {len(state.duplicate_groups) - len(state.decisions):,}
-- **Files to delete:** {len(delete_files):,}
+- **Files to move:** {len(delete_files):,}
 - **Space to recover:** {format_size(total_delete_size)}
 """
 
-    # Preview of files to delete
-    preview_lines = []
-    for f in delete_files[:50]:
-        preview_lines.append(f"DELETE: `{f['path']}` ({format_size(f['size'])})")
-
-    if len(delete_files) > 50:
-        preview_lines.append(f"\n... and {len(delete_files) - 50} more files")
-
-    preview = "\n".join(preview_lines) if preview_lines else "No files marked for deletion."
-
-    return summary, preview, delete_files
-
-
-def export_decisions():
-    """Export decisions and return the file path."""
-    if not state.decisions:
-        return "No decisions to export.", None
-
-    decisions_file = get_output_paths()["decisions_file"]
-    scan_info = {
-        "total_files": len(state.all_files),
-        "duplicate_groups": len(state.duplicate_groups),
-    }
-    save_decisions(state.decisions, scan_info)
-
-    return f"Decisions exported to: `{decisions_file}`", str(decisions_file)
+    return summary, "", delete_files
 
 
 # =============================================================================
@@ -1038,47 +903,6 @@ def batch_move_files(
                     break
 
     return results
-
-
-def move_file_to_dupes(service, file_id: str, target_folder_id: str) -> dict:
-    """Move a file to the target folder in _dupes.
-
-    Returns: {"success": bool, "error": str or None}
-    """
-    from googleapiclient.errors import HttpError
-    import time
-
-    max_retries = 5
-    for attempt in range(max_retries):
-        try:
-            # Get current parents
-            file = service.files().get(fileId=file_id, fields="parents").execute()
-            previous_parents = ",".join(file.get("parents", []))
-
-            if not previous_parents:
-                # File has no parent (orphaned), just add new parent
-                service.files().update(
-                    fileId=file_id,
-                    addParents=target_folder_id,
-                    fields="id, parents",
-                ).execute()
-            else:
-                # Move file
-                service.files().update(
-                    fileId=file_id,
-                    addParents=target_folder_id,
-                    removeParents=previous_parents,
-                    fields="id, parents",
-                ).execute()
-
-            return {"success": True, "error": None}
-        except HttpError as e:
-            if e.resp.status in (429, 403) and "rate" in str(e).lower():
-                wait_time = 2 ** attempt
-                time.sleep(wait_time)
-            else:
-                return {"success": False, "error": str(e)}
-    return {"success": False, "error": "Max retries exceeded due to rate limiting"}
 
 
 def prepare_execution_plan(delete_files: list[dict]) -> list[dict]:
@@ -1302,24 +1126,11 @@ def create_ui():
 
                 scan_status = gr.Textbox(label="Status", interactive=False)
                 scan_summary = gr.Markdown()
-                decisions_info = gr.Markdown()
 
             # =================================================================
             # Tab 2: Review Duplicates
             # =================================================================
             with gr.Tab("Review Duplicates"):
-                # Stats row
-                stats_display = gr.Markdown(value=get_stats_display)
-
-                # Search
-                with gr.Row():
-                    search_input = gr.Textbox(
-                        label="Search (path or filename)",
-                        placeholder="Enter search term...",
-                        scale=3,
-                    )
-                    search_btn = gr.Button("Search", scale=1)
-
                 # Navigation
                 with gr.Row():
                     prev_btn = gr.Button("< Previous", scale=1)
@@ -1327,13 +1138,6 @@ def create_ui():
 
                 # Header
                 group_header = gr.Markdown("Run a scan to see duplicates.")
-
-                # Multi-file selector (hidden by default)
-                multi_file_selector = gr.Radio(
-                    label="Select file to KEEP",
-                    choices=[],
-                    visible=False,
-                )
 
                 # Side-by-side comparison
                 with gr.Row():
@@ -1343,7 +1147,6 @@ def create_ui():
                         preview_img_a = gr.Image(label="Preview", height=300, visible=True)
                         preview_code_a = gr.Code(label="Preview", language="json", visible=False, lines=12)
                         metadata_a = gr.Markdown()
-                        link_a = gr.Markdown()
 
                     with gr.Column():
                         gr.Markdown("### FILE B")
@@ -1351,7 +1154,6 @@ def create_ui():
                         preview_img_b = gr.Image(label="Preview", height=300, visible=True)
                         preview_code_b = gr.Code(label="Preview", language="json", visible=False, lines=12)
                         metadata_b = gr.Markdown()
-                        link_b = gr.Markdown()
 
                 # Action buttons
                 with gr.Row():
@@ -1365,135 +1167,83 @@ def create_ui():
                     preview_img_a, preview_code_a,
                     preview_img_b, preview_code_b,
                     metadata_a, metadata_b,
-                    link_a, link_b,
                     keep_left_btn, keep_right_btn,
-                    multi_file_selector,
                 ]
 
                 # Wire up events
                 scan_btn.click(
                     fn=run_scan,
                     inputs=[path_input],
-                    outputs=[scan_status, scan_summary, decisions_info],
+                    outputs=[scan_status, scan_summary],
                 ).then(
                     fn=update_review_display,
                     outputs=review_outputs,
-                ).then(fn=get_stats_display, outputs=[stats_display])
-
-                search_btn.click(
-                    fn=on_search,
-                    inputs=[search_input],
-                    outputs=review_outputs,
-                ).then(fn=get_stats_display, outputs=[stats_display])
+                )
 
                 prev_btn.click(
                     fn=lambda: on_navigate("prev"),
                     outputs=review_outputs,
-                ).then(fn=get_stats_display, outputs=[stats_display])
+                )
 
                 next_btn.click(
                     fn=lambda: on_navigate("next"),
                     outputs=review_outputs,
-                ).then(fn=get_stats_display, outputs=[stats_display])
+                )
 
                 keep_left_btn.click(
                     fn=on_keep_left,
                     outputs=review_outputs,
-                ).then(fn=get_stats_display, outputs=[stats_display])
+                )
 
                 keep_right_btn.click(
                     fn=on_keep_right,
-                    inputs=[multi_file_selector],
                     outputs=review_outputs,
-                ).then(fn=get_stats_display, outputs=[stats_display])
-
-                multi_file_selector.change(
-                    fn=on_multi_file_select,
-                    inputs=[multi_file_selector],
-                    outputs=[path_b, preview_img_b, preview_code_b, metadata_b],
                 )
 
-            # =================================================================
-            # Tab 3: Export
-            # =================================================================
-            with gr.Tab("Export Decisions"):
-                gr.Markdown("### Export Decision Plan")
+                # Execute Moves accordion
+                with gr.Accordion("Execute Moves", open=False):
+                    gr.Markdown("Files will be moved to `/_dupes/` preserving their original folder structure. This is non-destructive — files can be restored by moving them back.")
 
-                refresh_btn = gr.Button("Refresh Summary")
+                    with gr.Row():
+                        dry_run_btn = gr.Button("Preview (Dry Run)", variant="secondary", scale=1)
+                        execute_btn = gr.Button("Execute Moves", variant="primary", scale=1)
 
-                export_summary = gr.Markdown()
-                export_preview = gr.Markdown()
+                    confirm_checkbox = gr.Checkbox(
+                        label="I understand this will move files in my Google Drive",
+                        value=False,
+                    )
 
-                gr.Markdown("---")
-                gr.Markdown("### Move Duplicates to _dupes Folder")
-                gr.Markdown("Files will be moved to `/_dupes/` preserving their original folder structure. This is a non-destructive operation - files can be restored by moving them back.")
+                    execution_status = gr.Markdown()
+                    execution_results = gr.Dataframe(
+                        headers=["Status", "Source Path", "Destination Path", "Details"],
+                        datatype=["str", "str", "str", "str"],
+                        interactive=False,
+                    )
 
-                with gr.Row():
-                    dry_run_btn = gr.Button("Preview (Dry Run)", variant="secondary", scale=1)
-                    execute_btn = gr.Button("Execute Moves", variant="primary", scale=1)
+                    dry_run_btn.click(
+                        fn=lambda: execute_moves(dry_run=True),
+                        outputs=[execution_status, execution_results],
+                    )
 
-                confirm_checkbox = gr.Checkbox(
-                    label="I understand this will move files in my Google Drive",
-                    value=False,
-                )
+                    def execute_with_confirmation(confirmed: bool):
+                        if not confirmed:
+                            return "Please check the confirmation box before executing.", []
+                        return execute_moves(dry_run=False)
 
-                execution_status = gr.Markdown()
-                execution_results = gr.Dataframe(
-                    headers=["Status", "Source Path", "Destination Path", "Details"],
-                    datatype=["str", "str", "str", "str"],
-                    interactive=False,
-                )
-
-                gr.Markdown("---")
-                gr.Markdown("### Export Decisions to JSON")
-                export_btn = gr.Button("Export to JSON")
-                export_status = gr.Markdown()
-                export_file = gr.File(label="Download", visible=False)
-
-                def refresh_export():
-                    summary, preview, _ = get_export_summary()
-                    return summary, preview
-
-                refresh_btn.click(
-                    fn=refresh_export,
-                    outputs=[export_summary, export_preview],
-                )
-
-                # Dry run - shows preview without moving
-                dry_run_btn.click(
-                    fn=lambda: execute_moves(dry_run=True),
-                    outputs=[execution_status, execution_results],
-                )
-
-                # Execute - requires confirmation
-                def execute_with_confirmation(confirmed: bool):
-                    if not confirmed:
-                        return "Please check the confirmation box before executing.", []
-                    return execute_moves(dry_run=False)
-
-                execute_btn.click(
-                    fn=execute_with_confirmation,
-                    inputs=[confirm_checkbox],
-                    outputs=[execution_status, execution_results],
-                ).then(
-                    fn=lambda: gr.update(value=False),
-                    outputs=[confirm_checkbox],
-                )
-
-                export_btn.click(
-                    fn=export_decisions,
-                    outputs=[export_status, export_file],
-                )
-
-        # Tip
-        gr.Markdown("---")
-        gr.Markdown("*Tip: Previous scan results are automatically loaded on startup. Rescan to refresh data.*")
+                    execute_btn.click(
+                        fn=execute_with_confirmation,
+                        inputs=[confirm_checkbox],
+                        outputs=[execution_status, execution_results],
+                    ).then(
+                        fn=lambda: gr.update(value=False),
+                        outputs=[confirm_checkbox],
+                    )
 
         # Load initial display on startup if scan results exist
         app.load(
             fn=update_review_display,
             outputs=review_outputs,
-        ).then(fn=get_stats_display, outputs=[stats_display])
+        )
 
     return app
 
