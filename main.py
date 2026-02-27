@@ -24,7 +24,6 @@ from gdrive_deduper import (
     find_duplicates,
     calculate_savings,
     format_size,
-    filter_by_path,
     filter_excluded_paths,
     get_exclude_paths,
     get_credentials_path,
@@ -398,7 +397,7 @@ def get_preview(file_info: FileInfo) -> tuple[str, any]:
 # Scan Tab Functions
 # =============================================================================
 
-def run_scan(path_filter: str, progress=gr.Progress()):
+def run_scan(progress=gr.Progress()):
     """Run the duplicate scan."""
     from googleapiclient.errors import HttpError
 
@@ -431,11 +430,7 @@ def run_scan(path_filter: str, progress=gr.Progress()):
     progress(0.5, desc="Building path index...")
     state.files_by_id, state.path_cache = build_lookups(state.all_files)
 
-    # Filter by path if specified
     files_to_scan = state.all_files
-    if path_filter and path_filter.strip():
-        progress(0.6, desc=f"Filtering to path: {path_filter}")
-        files_to_scan = filter_by_path(files_to_scan, path_filter.strip(), state.files_by_id, state.path_cache)
 
     # Apply exclude paths from config file and env var
     exclude_paths = get_exclude_paths()
@@ -1112,13 +1107,7 @@ def create_ui():
         # Scan section
         gr.Markdown("### Scan Google Drive for Duplicates")
 
-        with gr.Row():
-            path_input = gr.Textbox(
-                label="Path Filter (optional)",
-                placeholder="/Photos or leave empty for all files",
-                scale=3,
-            )
-            scan_btn = gr.Button("Run Scan", variant="primary", scale=1)
+        scan_btn = gr.Button("Run Scan", variant="primary")
 
         scan_status = gr.Textbox(label="Status", interactive=False)
         scan_summary = gr.Markdown()
@@ -1161,7 +1150,6 @@ def create_ui():
         # Wire up events
         scan_btn.click(
             fn=run_scan,
-            inputs=[path_input],
             outputs=[scan_status, scan_summary],
         ).then(
             fn=update_review_display,
