@@ -67,5 +67,5 @@ def list_profiles() -> list[str]:
     if not PROFILES_DIR.exists():
         return []
     return sorted(
-        d.name for d in PROFILES_DIR.iterdir() if d.is_dir()
+        d.name for d in PROFILES_DIR.iterdir() if d.is_dir() and not d.name.startswith(".")
     )

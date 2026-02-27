@@ -1566,9 +1566,24 @@ if __name__ == "__main__":
         print(f"  Edit {profile_dir / 'config.yaml'} to customize settings")
         sys.exit(0)
 
+    # Require --profile for normal operation
+    if not args.profile:
+        profiles = list_profiles()
+        print("Error: --profile is required.")
+        print()
+        if profiles:
+            print("Available profiles:")
+            for name in profiles:
+                print(f"  {name}")
+            print()
+            print("Usage: uv run main.py --profile <name>")
+        else:
+            print("No profiles found. Create one first:")
+            print("  uv run main.py --init-profile <name>")
+        sys.exit(1)
+
     # Activate profile
-    if args.profile:
-        set_active_profile(args.profile)
+    set_active_profile(args.profile)
 
     # Setup logging
     setup_logging(verbose=args.verbose, log_file=args.log_file)
@@ -1589,6 +1604,23 @@ if __name__ == "__main__":
         except Exception as e:
             logger.error(f"Credential validation failed: {e}")
             sys.exit(1)
+
+    # Authenticate before launching UI
+    logger = logging.getLogger(__name__)
+    credentials_path = get_credentials_path()
+    try:
+        creds = authenticate(credentials_path)
+        state.service = build("drive", "v3", credentials=creds)
+        about = state.service.about().get(fields="user(displayName, emailAddress)").execute()
+        user = about.get("user", {})
+        email = user.get("emailAddress", "unknown")
+        name = user.get("displayName", "")
+        logger.info(f"Authenticated as: {name} <{email}>")
+    except SystemExit:
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Authentication failed: {e}")
+        sys.exit(1)
 
     # Launch Gradio
     ensure_dirs()

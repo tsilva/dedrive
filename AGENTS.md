@@ -8,32 +8,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies
 uv sync
 
-# Launch the Gradio web UI (main entry point)
-uv run main.py
+# Launch the Gradio web UI (--profile is required)
+uv run main.py --profile work
 
 # Launch on a custom port
-uv run main.py --port 8080
+uv run main.py --profile work --port 8080
 
 # Enable public sharing link
-uv run main.py --share
+uv run main.py --profile work --share
 
 # Enable verbose/debug logging
-uv run main.py --verbose
+uv run main.py --profile work --verbose
 
 # Write logs to file
-uv run main.py --log-file debug.log
+uv run main.py --profile work --log-file debug.log
 
 # Validate credentials without launching UI
-uv run main.py --validate
+uv run main.py --profile work --validate
 
 # Create a profile (for multiple Google accounts)
 uv run main.py --init-profile work
 
 # List profiles
 uv run main.py --list-profiles
-
-# Launch with a profile active
-uv run main.py --profile work
 
 # Profile with other flags
 uv run main.py --profile work --verbose --port 8080
@@ -127,6 +124,7 @@ Gradio-based web UI (`main.py`) for finding and managing duplicate files in Goog
 - **CLI arguments:** Profile management (`--profile`, `--init-profile`, `--list-profiles`), credential validation (`--validate`), logging (`--verbose`, `--log-file`), Gradio options (`--port`, `--share`)
 
 **Key design decisions:**
+- `--profile` is required; authentication happens at startup before Gradio launches
 - Uses `drive` scope (full access for file moves)
 - Fetches all files in one query then filters locally (faster than recursive folder traversal)
 - Path resolution uses memoization (`path_cache`) for efficiency

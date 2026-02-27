@@ -49,7 +49,7 @@ logs/
 
 # Project-specific rules
 !.output/.gitkeep
-!profiles/example/
+!profiles/.example/
 *$py.class
 *.cover
 *.egg
@@ -132,4 +132,4 @@ token.json
 var/
 venv.bak/
 wheels/
-!profiles/example
+!profiles/.example
