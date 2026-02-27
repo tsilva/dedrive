@@ -187,6 +187,12 @@ def get_exclude_paths(cli_excludes: list[str] = None) -> list[str]:
     if cli_excludes:
         exclude_paths.extend(cli_excludes)
 
+    # Profile config.yaml (when a profile is active)
+    if active_profile and "exclude_paths" in _profile_config:
+        profile_paths = _profile_config["exclude_paths"]
+        if isinstance(profile_paths, list):
+            exclude_paths.extend(profile_paths)
+
     # Load from config file
     config = load_config()
     file_paths = config.get("exclude_paths", [])
