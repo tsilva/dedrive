@@ -15,9 +15,16 @@ import gradio as gr
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
+import threading
+
 from gdrive_deduper import (
     SCOPES,
     authenticate,
+    create_oauth_flow,
+    run_oauth_callback_server,
+    save_token,
+    load_existing_token,
+    get_user_info,
     fetch_all_files,
     build_lookups,
     get_path,
@@ -27,12 +34,16 @@ from gdrive_deduper import (
     filter_excluded_paths,
     get_exclude_paths,
     get_credentials_path,
+    get_token_path,
     get_output_dir,
     get_dupes_folder,
     get_batch_size,
     get_max_preview_size,
     setup_logging,
     set_active_profile,
+    set_active_profile_from_email,
+    clear_active_profile,
+    delete_profile_token,
     init_profile,
     list_profiles,
 )
@@ -84,6 +95,17 @@ class AppState:
     """Application state."""
     # Google Drive service
     service: object = None
+
+    # User info
+    user_email: str = ""
+    user_name: str = ""
+
+    # OAuth in-progress state
+    _oauth_flow: object = None
+    _oauth_port: int = 0
+    _oauth_thread: object = None
+    _oauth_result: object = None
+    _oauth_error: str = ""
 
     # Scan data
     all_files: list[dict] = field(default_factory=list)
@@ -302,6 +324,210 @@ def ensure_service():
     except Exception as e:
         print(f"Authentication failed: {type(e).__name__}: {e}")
         return False
+
+
+def _init_session_data():
+    """Initialize session data after login (ensure dirs, load scan results, decisions)."""
+    ensure_dirs()
+    if load_scan_results():
+        print("Previous scan results loaded. You can continue reviewing duplicates.")
+    state.decisions = load_decisions()
+
+
+def start_login():
+    """Start the OAuth login flow. Returns UI updates."""
+    try:
+        credentials_path = get_credentials_path()
+        auth_url, flow, port = create_oauth_flow(credentials_path)
+
+        state._oauth_flow = flow
+        state._oauth_port = port
+        state._oauth_result = None
+        state._oauth_error = ""
+
+        def _run_callback():
+            try:
+                creds = run_oauth_callback_server(flow, port)
+                state._oauth_result = creds
+            except Exception as e:
+                state._oauth_error = str(e)
+
+        state._oauth_thread = threading.Thread(target=_run_callback, daemon=True)
+        state._oauth_thread.start()
+
+        return (
+            gr.update(value=f"**Click the link below to sign in with Google:**\n\n[Sign in with Google]({auth_url})", visible=True),  # login_status
+            gr.update(visible=False),  # login_btn
+            gr.update(active=True),  # login_timer
+        )
+    except FileNotFoundError as e:
+        return (
+            gr.update(value=f"**Error:** {e}\n\nPlease ensure `credentials.json` exists.", visible=True),
+            gr.update(visible=True),
+            gr.update(active=False),
+        )
+    except Exception as e:
+        return (
+            gr.update(value=f"**Error starting login:** {e}", visible=True),
+            gr.update(visible=True),
+            gr.update(active=False),
+        )
+
+
+def check_login_complete():
+    """Poll for OAuth completion. Called by gr.Timer."""
+    # Check if thread is still running
+    if state._oauth_thread and state._oauth_thread.is_alive():
+        # Still waiting
+        return (
+            gr.update(),  # login_status
+            gr.update(),  # login_btn
+            gr.update(),  # login_timer
+            gr.update(),  # login_section
+            gr.update(),  # main_section
+            gr.update(),  # user_info_display
+        )
+
+    if state._oauth_error:
+        error = state._oauth_error
+        state._oauth_error = ""
+        state._oauth_thread = None
+        return (
+            gr.update(value=f"**Login failed:** {error}"),  # login_status
+            gr.update(visible=True),  # login_btn
+            gr.update(active=False),  # login_timer
+            gr.update(),  # login_section
+            gr.update(),  # main_section
+            gr.update(),  # user_info_display
+        )
+
+    if state._oauth_result:
+        creds = state._oauth_result
+        state._oauth_result = None
+        state._oauth_thread = None
+
+        try:
+            state.service = build("drive", "v3", credentials=creds)
+            user_info = get_user_info(state.service)
+            state.user_email = user_info["email"]
+            state.user_name = user_info["name"]
+
+            # Create/activate profile based on email
+            profile_name = set_active_profile_from_email(state.user_email)
+
+            # Save token to profile
+            token_path = get_token_path()
+            save_token(creds, token_path)
+
+            # Initialize session data
+            _init_session_data()
+
+            display_name = state.user_name or state.user_email
+            return (
+                gr.update(),  # login_status
+                gr.update(),  # login_btn
+                gr.update(active=False),  # login_timer
+                gr.update(visible=False),  # login_section
+                gr.update(visible=True),  # main_section
+                gr.update(value=f"Signed in as **{display_name}** ({state.user_email})"),  # user_info_display
+            )
+        except Exception as e:
+            return (
+                gr.update(value=f"**Login failed:** {e}"),
+                gr.update(visible=True),
+                gr.update(active=False),
+                gr.update(),
+                gr.update(),
+                gr.update(),
+            )
+
+    # No result yet, no error - shouldn't happen but handle gracefully
+    return (
+        gr.update(),
+        gr.update(),
+        gr.update(),
+        gr.update(),
+        gr.update(),
+        gr.update(),
+    )
+
+
+def do_logout():
+    """Log out: delete token, reset state, switch to login UI."""
+    if state.user_email:
+        from gdrive_deduper.config import active_profile
+        if active_profile:
+            delete_profile_token(active_profile)
+
+    # Reset state
+    state.service = None
+    state.user_email = ""
+    state.user_name = ""
+    state.all_files = []
+    state.files_by_id = {}
+    state.path_cache = {}
+    state.duplicate_groups = []
+    state.current_index = 0
+    state.filtered_indices = []
+    state.filter_status = "pending"
+    state.decisions = {}
+    clear_active_profile()
+
+    return (
+        gr.update(visible=True),  # login_section
+        gr.update(visible=False),  # main_section
+        gr.update(value="Sign in to manage your Google Drive duplicates.", visible=True),  # login_status
+        gr.update(visible=True),  # login_btn
+    )
+
+
+def try_auto_login():
+    """Attempt auto-login on app load if profile has a valid token."""
+    from gdrive_deduper.config import active_profile
+
+    if not active_profile:
+        # No profile set, show login UI
+        return (
+            gr.update(visible=True),  # login_section
+            gr.update(visible=False),  # main_section
+            gr.update(value="Sign in to manage your Google Drive duplicates."),  # login_status
+            gr.update(),  # user_info_display
+        )
+
+    token_path = get_token_path()
+    creds = load_existing_token(token_path)
+
+    if not creds:
+        return (
+            gr.update(visible=True),
+            gr.update(visible=False),
+            gr.update(value="Sign in to manage your Google Drive duplicates."),
+            gr.update(),
+        )
+
+    try:
+        state.service = build("drive", "v3", credentials=creds)
+        user_info = get_user_info(state.service)
+        state.user_email = user_info["email"]
+        state.user_name = user_info["name"]
+
+        _init_session_data()
+
+        display_name = state.user_name or state.user_email
+        return (
+            gr.update(visible=False),  # login_section
+            gr.update(visible=True),  # main_section
+            gr.update(),  # login_status
+            gr.update(value=f"Signed in as **{display_name}** ({state.user_email})"),  # user_info_display
+        )
+    except Exception as e:
+        print(f"Auto-login failed: {e}")
+        return (
+            gr.update(visible=True),
+            gr.update(visible=False),
+            gr.update(value="Session expired. Please sign in again."),
+            gr.update(),
+        )
 
 
 def download_file(file_id: str) -> Optional[Path]:
@@ -1106,121 +1332,149 @@ def create_ui():
     with gr.Blocks(title="Google Drive Deduplication Manager") as app:
         gr.Markdown("# Google Drive Deduplication Manager")
 
-        # Scan section
-        gr.Markdown("### Scan Google Drive for Duplicates")
+        # --- Login Section ---
+        with gr.Column(visible=True) as login_section:
+            login_status = gr.Markdown("Sign in to manage your Google Drive duplicates.")
+            login_btn = gr.Button("Sign in with Google", variant="primary")
+            login_timer = gr.Timer(value=2, active=False)
 
-        scan_btn = gr.Button("Run Scan", variant="primary")
+        # --- Main Section (hidden until logged in) ---
+        with gr.Column(visible=False) as main_section:
+            with gr.Row():
+                user_info_display = gr.Markdown()
+                logout_btn = gr.Button("Sign Out", variant="secondary", scale=0, min_width=100)
 
-        scan_status = gr.Textbox(label="Status", interactive=False)
-        scan_summary = gr.Markdown()
+            # Scan section
+            gr.Markdown("### Scan Google Drive for Duplicates")
 
-        # Review section
-        with gr.Row():
-            prev_btn = gr.Button("< Previous", scale=1)
-            next_btn = gr.Button("Next >", scale=1)
+            scan_btn = gr.Button("Run Scan", variant="primary")
 
-        group_header = gr.Markdown("Run a scan to see duplicates.")
+            scan_status = gr.Textbox(label="Status", interactive=False)
+            scan_summary = gr.Markdown()
 
-        with gr.Row():
-            with gr.Column():
-                gr.Markdown("### FILE A")
-                path_a = gr.Textbox(show_label=False, interactive=False)
-                preview_img_a = gr.Image(label="Preview", height=300, visible=True)
-                preview_code_a = gr.Code(label="Preview", language="json", visible=False, lines=12)
-                metadata_a = gr.Markdown()
+            # Review section
+            with gr.Row():
+                prev_btn = gr.Button("< Previous", scale=1)
+                next_btn = gr.Button("Next >", scale=1)
 
-            with gr.Column():
-                gr.Markdown("### FILE B")
-                path_b = gr.Textbox(show_label=False, interactive=False)
-                preview_img_b = gr.Image(label="Preview", height=300, visible=True)
-                preview_code_b = gr.Code(label="Preview", language="json", visible=False, lines=12)
-                metadata_b = gr.Markdown()
-
-        with gr.Row():
-            keep_left_btn = gr.Button("Keep Left (A)", variant="primary", scale=1)
-            keep_right_btn = gr.Button("Keep Right (B)", variant="primary", scale=1)
-
-        review_outputs = [
-            group_header,
-            path_a, path_b,
-            preview_img_a, preview_code_a,
-            preview_img_b, preview_code_b,
-            metadata_a, metadata_b,
-            keep_left_btn, keep_right_btn,
-        ]
-
-        # Wire up events
-        scan_btn.click(
-            fn=run_scan,
-            outputs=[scan_status, scan_summary],
-        ).then(
-            fn=update_review_display,
-            outputs=review_outputs,
-        )
-
-        prev_btn.click(
-            fn=lambda: on_navigate("prev"),
-            outputs=review_outputs,
-        )
-
-        next_btn.click(
-            fn=lambda: on_navigate("next"),
-            outputs=review_outputs,
-        )
-
-        keep_left_btn.click(
-            fn=on_keep_left,
-            outputs=review_outputs,
-        )
-
-        keep_right_btn.click(
-            fn=on_keep_right,
-            outputs=review_outputs,
-        )
-
-        # Execute Moves accordion
-        with gr.Accordion("Execute Moves", open=False):
-            gr.Markdown("Files will be moved to `/_dupes/` preserving their original folder structure. This is non-destructive — files can be restored by moving them back.")
+            group_header = gr.Markdown("Run a scan to see duplicates.")
 
             with gr.Row():
-                dry_run_btn = gr.Button("Preview (Dry Run)", variant="secondary", scale=1)
-                execute_btn = gr.Button("Execute Moves", variant="primary", scale=1)
+                with gr.Column():
+                    gr.Markdown("### FILE A")
+                    path_a = gr.Textbox(show_label=False, interactive=False)
+                    preview_img_a = gr.Image(label="Preview", height=300, visible=True)
+                    preview_code_a = gr.Code(label="Preview", language="json", visible=False, lines=12)
+                    metadata_a = gr.Markdown()
 
-            confirm_checkbox = gr.Checkbox(
-                label="I understand this will move files in my Google Drive",
-                value=False,
-            )
+                with gr.Column():
+                    gr.Markdown("### FILE B")
+                    path_b = gr.Textbox(show_label=False, interactive=False)
+                    preview_img_b = gr.Image(label="Preview", height=300, visible=True)
+                    preview_code_b = gr.Code(label="Preview", language="json", visible=False, lines=12)
+                    metadata_b = gr.Markdown()
 
-            execution_status = gr.Markdown()
-            execution_results = gr.Dataframe(
-                headers=["Status", "Source Path", "Destination Path", "Details"],
-                datatype=["str", "str", "str", "str"],
-                interactive=False,
-            )
+            with gr.Row():
+                keep_left_btn = gr.Button("Keep Left (A)", variant="primary", scale=1)
+                keep_right_btn = gr.Button("Keep Right (B)", variant="primary", scale=1)
 
-            dry_run_btn.click(
-                fn=lambda: execute_moves(dry_run=True),
-                outputs=[execution_status, execution_results],
-            )
+            review_outputs = [
+                group_header,
+                path_a, path_b,
+                preview_img_a, preview_code_a,
+                preview_img_b, preview_code_b,
+                metadata_a, metadata_b,
+                keep_left_btn, keep_right_btn,
+            ]
 
-            def execute_with_confirmation(confirmed: bool):
-                if not confirmed:
-                    return "Please check the confirmation box before executing.", []
-                return execute_moves(dry_run=False)
-
-            execute_btn.click(
-                fn=execute_with_confirmation,
-                inputs=[confirm_checkbox],
-                outputs=[execution_status, execution_results],
+            # Wire up scan/review events
+            scan_btn.click(
+                fn=run_scan,
+                outputs=[scan_status, scan_summary],
             ).then(
-                fn=lambda: gr.update(value=False),
-                outputs=[confirm_checkbox],
+                fn=update_review_display,
+                outputs=review_outputs,
             )
 
-        # Load initial display on startup if scan results exist
+            prev_btn.click(
+                fn=lambda: on_navigate("prev"),
+                outputs=review_outputs,
+            )
+
+            next_btn.click(
+                fn=lambda: on_navigate("next"),
+                outputs=review_outputs,
+            )
+
+            keep_left_btn.click(
+                fn=on_keep_left,
+                outputs=review_outputs,
+            )
+
+            keep_right_btn.click(
+                fn=on_keep_right,
+                outputs=review_outputs,
+            )
+
+            # Execute Moves accordion
+            with gr.Accordion("Execute Moves", open=False):
+                gr.Markdown("Files will be moved to `/_dupes/` preserving their original folder structure. This is non-destructive — files can be restored by moving them back.")
+
+                with gr.Row():
+                    dry_run_btn = gr.Button("Preview (Dry Run)", variant="secondary", scale=1)
+                    execute_btn = gr.Button("Execute Moves", variant="primary", scale=1)
+
+                confirm_checkbox = gr.Checkbox(
+                    label="I understand this will move files in my Google Drive",
+                    value=False,
+                )
+
+                execution_status = gr.Markdown()
+                execution_results = gr.Dataframe(
+                    headers=["Status", "Source Path", "Destination Path", "Details"],
+                    datatype=["str", "str", "str", "str"],
+                    interactive=False,
+                )
+
+                dry_run_btn.click(
+                    fn=lambda: execute_moves(dry_run=True),
+                    outputs=[execution_status, execution_results],
+                )
+
+                def execute_with_confirmation(confirmed: bool):
+                    if not confirmed:
+                        return "Please check the confirmation box before executing.", []
+                    return execute_moves(dry_run=False)
+
+                execute_btn.click(
+                    fn=execute_with_confirmation,
+                    inputs=[confirm_checkbox],
+                    outputs=[execution_status, execution_results],
+                ).then(
+                    fn=lambda: gr.update(value=False),
+                    outputs=[confirm_checkbox],
+                )
+
+        # --- Login/Logout Event Wiring ---
+        login_btn.click(
+            fn=start_login,
+            outputs=[login_status, login_btn, login_timer],
+        )
+
+        login_timer.tick(
+            fn=check_login_complete,
+            outputs=[login_status, login_btn, login_timer, login_section, main_section, user_info_display],
+        )
+
+        logout_btn.click(
+            fn=do_logout,
+            outputs=[login_section, main_section, login_status, login_btn],
+        )
+
+        # Auto-login on app load
         app.load(
-            fn=update_review_display,
-            outputs=review_outputs,
+            fn=try_auto_login,
+            outputs=[login_section, main_section, login_status, user_info_display],
         )
 
     return app
@@ -1294,66 +1548,30 @@ if __name__ == "__main__":
         print(f"  Edit {profile_dir / 'config.yaml'} to customize settings")
         sys.exit(0)
 
-    # Require --profile for normal operation
-    if not args.profile:
-        profiles = list_profiles()
-        print("Error: --profile is required.")
-        print()
-        if profiles:
-            print("Available profiles:")
-            for name in profiles:
-                print(f"  {name}")
-            print()
-            print("Usage: uv run main.py --profile <name>")
-        else:
-            print("No profiles found. Create one first:")
-            print("  uv run main.py --init-profile <name>")
-        sys.exit(1)
-
-    # Activate profile
-    set_active_profile(args.profile)
+    # Activate profile if provided (optional now — login UI handles it otherwise)
+    if args.profile:
+        set_active_profile(args.profile)
 
     # Setup logging
     setup_logging(verbose=args.verbose, log_file=args.log_file)
 
-    # Validate-only mode
+    # Validate-only mode (requires --profile)
     if args.validate:
+        if not args.profile:
+            print("Error: --validate requires --profile")
+            sys.exit(1)
         logger = logging.getLogger(__name__)
         credentials_path = get_credentials_path()
         try:
             creds = authenticate(credentials_path)
             service = build("drive", "v3", credentials=creds)
-            about = service.about().get(fields="user(displayName, emailAddress)").execute()
-            user = about.get("user", {})
-            email = user.get("emailAddress", "unknown")
-            name = user.get("displayName", "")
-            logger.info(f"Credentials valid. Connected as: {name} <{email}>")
+            user_info = get_user_info(service)
+            logger.info(f"Credentials valid. Connected as: {user_info['name']} <{user_info['email']}>")
             sys.exit(0)
         except Exception as e:
             logger.error(f"Credential validation failed: {e}")
             sys.exit(1)
 
-    # Authenticate before launching UI
-    logger = logging.getLogger(__name__)
-    credentials_path = get_credentials_path()
-    try:
-        creds = authenticate(credentials_path)
-        state.service = build("drive", "v3", credentials=creds)
-        about = state.service.about().get(fields="user(displayName, emailAddress)").execute()
-        user = about.get("user", {})
-        email = user.get("emailAddress", "unknown")
-        name = user.get("displayName", "")
-        logger.info(f"Authenticated as: {name} <{email}>")
-    except SystemExit:
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"Authentication failed: {e}")
-        sys.exit(1)
-
-    # Launch Gradio
-    ensure_dirs()
-    if load_scan_results():
-        print("Previous scan results loaded. You can continue reviewing duplicates.")
-    state.decisions = load_decisions()
+    # Launch Gradio (login happens in the UI)
     app = create_ui()
     app.launch(share=args.share, server_port=args.port)

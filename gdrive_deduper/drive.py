@@ -2,6 +2,7 @@
 
 import logging
 import os
+import socket
 import sys
 import time
 from pathlib import Path
@@ -45,6 +46,164 @@ def setup_logging(verbose: bool = False, log_file: str = None):
     )
 
 
+def _find_available_port() -> int:
+    """Find an available TCP port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
+
+def save_token(creds: Credentials, token_path: Path):
+    """Save OAuth credentials to a token file.
+
+    Args:
+        creds: Google OAuth credentials to save.
+        token_path: Path to write the token file.
+    """
+    token_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(token_path, "w") as token:
+        token.write(creds.to_json())
+    os.chmod(token_path, 0o600)
+    logger.debug(f"Token saved to {token_path}")
+
+
+def load_existing_token(token_path: Path) -> Credentials | None:
+    """Load and refresh an existing token if possible.
+
+    Args:
+        token_path: Path to the token file.
+
+    Returns:
+        Valid Credentials if token exists and is valid/refreshable, None otherwise.
+    """
+    if not token_path.exists():
+        return None
+
+    logger.debug(f"Loading existing token from {token_path}")
+    creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+
+    if creds and creds.valid:
+        return creds
+
+    if creds and creds.expired and creds.refresh_token:
+        try:
+            logger.debug("Refreshing expired token")
+            creds.refresh(Request())
+            save_token(creds, token_path)
+            return creds
+        except RefreshError as e:
+            logger.warning(f"Token refresh failed: {e}")
+            token_path.unlink(missing_ok=True)
+
+    return None
+
+
+def create_oauth_flow(credentials_path: Path) -> tuple[str, InstalledAppFlow, int]:
+    """Create an OAuth flow and return the authorization URL without blocking.
+
+    Args:
+        credentials_path: Path to the OAuth credentials JSON file.
+
+    Returns:
+        Tuple of (auth_url, flow, port).
+
+    Raises:
+        FileNotFoundError: If credentials file is missing.
+    """
+    if not credentials_path.exists():
+        raise FileNotFoundError(f"OAuth credentials not found at {credentials_path}")
+
+    port = _find_available_port()
+    flow = InstalledAppFlow.from_client_secrets_file(
+        str(credentials_path),
+        SCOPES,
+        redirect_uri=f"http://localhost:{port}/",
+    )
+    auth_url, _ = flow.authorization_url(prompt="consent")
+    return auth_url, flow, port
+
+
+def run_oauth_callback_server(flow: InstalledAppFlow, port: int, timeout: int = 300) -> Credentials:
+    """Run a minimal server to handle the OAuth redirect callback.
+
+    Blocks until the user completes auth or timeout expires.
+    Intended to be run in a background thread.
+
+    Args:
+        flow: The InstalledAppFlow from create_oauth_flow.
+        port: The port to listen on (must match redirect_uri).
+        timeout: Max seconds to wait for callback.
+
+    Returns:
+        Valid Google OAuth Credentials.
+
+    Raises:
+        TimeoutError: If no callback received within timeout.
+        Exception: If token exchange fails.
+    """
+    from wsgiref.simple_server import make_server, WSGIRequestHandler
+    import urllib.parse
+
+    result = {"creds": None, "error": None}
+
+    class QuietHandler(WSGIRequestHandler):
+        def log_message(self, format, *args):
+            pass  # Suppress server logs
+
+    def app(environ, start_response):
+        query = urllib.parse.parse_qs(environ.get("QUERY_STRING", ""))
+        code = query.get("code", [None])[0]
+        error = query.get("error", [None])[0]
+
+        if error:
+            result["error"] = error
+            body = b"<html><body><h2>Authentication failed.</h2><p>You can close this tab.</p></body></html>"
+        elif code:
+            try:
+                flow.fetch_token(code=code)
+                result["creds"] = flow.credentials
+                body = b"<html><body><h2>Authentication successful!</h2><p>You can close this tab and return to the app.</p></body></html>"
+            except Exception as e:
+                result["error"] = str(e)
+                body = b"<html><body><h2>Authentication failed.</h2><p>You can close this tab.</p></body></html>"
+        else:
+            body = b"<html><body><p>Waiting for authentication...</p></body></html>"
+
+        start_response("200 OK", [("Content-Type", "text/html")])
+        return [body]
+
+    server = make_server("localhost", port, app, handler_class=QuietHandler)
+    server.timeout = timeout
+
+    # Handle one request (the OAuth redirect)
+    server.handle_request()
+    server.server_close()
+
+    if result["error"]:
+        raise Exception(f"OAuth error: {result['error']}")
+    if result["creds"] is None:
+        raise TimeoutError("No OAuth callback received")
+
+    return result["creds"]
+
+
+def get_user_info(service) -> dict:
+    """Get the authenticated user's info from Google Drive.
+
+    Args:
+        service: Google Drive API service instance.
+
+    Returns:
+        Dict with 'email' and 'name' keys.
+    """
+    about = service.about().get(fields="user(displayName, emailAddress)").execute()
+    user = about.get("user", {})
+    return {
+        "email": user.get("emailAddress", "unknown"),
+        "name": user.get("displayName", ""),
+    }
+
+
 def authenticate(credentials_path: Path) -> Credentials:
     """Handle OAuth authentication flow.
 
@@ -57,56 +216,31 @@ def authenticate(credentials_path: Path) -> Credentials:
     Raises:
         SystemExit: If credentials file is missing.
     """
-    creds = None
     token_path = get_token_path(credentials_path)
 
-    if token_path.exists():
-        logger.debug(f"Loading existing token from {token_path}")
-        creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+    creds = load_existing_token(token_path)
+    if creds:
+        return creds
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
-                logger.debug("Refreshing expired token")
-                creds.refresh(Request())
-            except RefreshError as e:
-                logger.warning(f"Token refresh failed: {e}")
-                logger.info("Token expired or revoked. Re-authenticating...")
-                token_path.unlink(missing_ok=True)
-                if not credentials_path.exists():
-                    logger.error(f"OAuth credentials not found at {credentials_path}")
-                    logger.error("Cannot re-authenticate without credentials file.")
-                    sys.exit(1)
-                flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
-                creds = flow.run_local_server(port=0)
-        else:
-            if not credentials_path.exists():
-                logger.error(f"OAuth credentials not found at {credentials_path}")
-                logger.error("")
-                logger.error("To fix this:")
-                logger.error("  1. Go to https://console.cloud.google.com/apis/credentials")
-                logger.error("  2. Create a project (if you haven't already)")
-                logger.error("  3. Enable the Google Drive API")
-                logger.error("  4. Create OAuth 2.0 Client ID (choose 'Desktop app')")
-                logger.error("  5. Download the JSON file")
-                logger.error(f"  6. Save it as: {credentials_path}")
-                logger.error("")
-                logger.error("Or set GDRIVE_CREDENTIALS_PATH to use a different location.")
-                sys.exit(1)
+    if not credentials_path.exists():
+        logger.error(f"OAuth credentials not found at {credentials_path}")
+        logger.error("")
+        logger.error("To fix this:")
+        logger.error("  1. Go to https://console.cloud.google.com/apis/credentials")
+        logger.error("  2. Create a project (if you haven't already)")
+        logger.error("  3. Enable the Google Drive API")
+        logger.error("  4. Create OAuth 2.0 Client ID (choose 'Desktop app')")
+        logger.error("  5. Download the JSON file")
+        logger.error(f"  6. Save it as: {credentials_path}")
+        logger.error("")
+        logger.error("Or set GDRIVE_CREDENTIALS_PATH to use a different location.")
+        sys.exit(1)
 
-            logger.info("Starting OAuth flow (browser will open)...")
-            flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
-            creds = flow.run_local_server(port=0)
+    logger.info("Starting OAuth flow (browser will open)...")
+    flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
+    creds = flow.run_local_server(port=0)
 
-        # Ensure token directory exists
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(token_path, "w") as token:
-            token.write(creds.to_json())
-
-        # Set restrictive permissions (owner read/write only)
-        os.chmod(token_path, 0o600)
-        logger.debug(f"Token saved to {token_path}")
+    save_token(creds, token_path)
 
     return creds
 

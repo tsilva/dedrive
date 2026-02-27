@@ -57,6 +57,18 @@ def init_profile(name: str) -> Path:
     return profile_dir
 
 
+def delete_profile_token(name: str) -> bool:
+    """Delete the token.json for a profile (logout).
+
+    Returns True if token was deleted, False if it didn't exist.
+    """
+    token_path = get_profile_token_path(name)
+    if token_path.exists():
+        token_path.unlink()
+        return True
+    return False
+
+
 def list_profiles() -> list[str]:
     """List all profile names (subdirectories of profiles/)."""
     if not PROFILES_DIR.exists():

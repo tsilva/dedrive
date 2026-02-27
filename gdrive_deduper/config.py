@@ -7,7 +7,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from gdrive_deduper.profiles import load_profile, get_profile_token_path, get_profile_output_dir
+from gdrive_deduper.profiles import load_profile, get_profile_token_path, get_profile_output_dir, init_profile
 
 # Load .env file if present
 load_dotenv()
@@ -22,6 +22,27 @@ def set_active_profile(name: str):
     global active_profile, _profile_config
     active_profile = name
     _profile_config = load_profile(name)
+
+
+def set_active_profile_from_email(email: str) -> str:
+    """Create (if needed) and activate a profile based on user email.
+
+    Args:
+        email: The user's email address, used as the profile name.
+
+    Returns:
+        The profile name (same as email).
+    """
+    init_profile(email)
+    set_active_profile(email)
+    return email
+
+
+def clear_active_profile():
+    """Reset the active profile to None."""
+    global active_profile, _profile_config
+    active_profile = None
+    _profile_config = {}
 
 # Default configuration values
 DEFAULTS = {

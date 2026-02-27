@@ -4,6 +4,11 @@ from gdrive_deduper.drive import (
     SCOPES,
     setup_logging,
     authenticate,
+    create_oauth_flow,
+    run_oauth_callback_server,
+    save_token,
+    load_existing_token,
+    get_user_info,
     fetch_with_retry,
     fetch_all_files,
     build_lookups,
@@ -26,12 +31,15 @@ from gdrive_deduper.config import (
     get_batch_size,
     get_max_preview_size,
     set_active_profile,
+    set_active_profile_from_email,
+    clear_active_profile,
     create_default_config,
     print_config,
 )
 from gdrive_deduper.profiles import (
     init_profile,
     list_profiles,
+    delete_profile_token,
 )
 
 __all__ = [
@@ -39,6 +47,11 @@ __all__ = [
     "SCOPES",
     "setup_logging",
     "authenticate",
+    "create_oauth_flow",
+    "run_oauth_callback_server",
+    "save_token",
+    "load_existing_token",
+    "get_user_info",
     "fetch_with_retry",
     "fetch_all_files",
     "build_lookups",
@@ -59,9 +72,12 @@ __all__ = [
     "get_batch_size",
     "get_max_preview_size",
     "set_active_profile",
+    "set_active_profile_from_email",
+    "clear_active_profile",
     "create_default_config",
     "print_config",
     # profiles
     "init_profile",
     "list_profiles",
+    "delete_profile_token",
 ]
