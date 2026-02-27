@@ -214,6 +214,7 @@ def load_scan_results() -> bool:
                 files=files,
                 uncertain=g["uncertain"],
             ))
+        state.duplicate_groups.sort(key=lambda g: g.files[0].size, reverse=True)
 
         # Restore files_by_id for preview downloads
         state.files_by_id = data.get("files_by_id", {})
@@ -450,6 +451,7 @@ def run_scan(progress=gr.Progress()):
             files=files,
             uncertain=dup["uncertain"],
         ))
+    state.duplicate_groups.sort(key=lambda g: g.files[0].size, reverse=True)
 
     progress(0.9, desc="Loading existing decisions...")
     state.decisions = load_decisions()
@@ -1288,7 +1290,7 @@ if __name__ == "__main__":
     if args.init_profile:
         profile_dir = init_profile(args.init_profile)
         print(f"Profile '{args.init_profile}' created at {profile_dir}")
-        print(f"  Copy your credentials.json into {profile_dir}/")
+        print(f"  Ensure credentials.json exists at the project root")
         print(f"  Edit {profile_dir / 'config.yaml'} to customize settings")
         sys.exit(0)
 

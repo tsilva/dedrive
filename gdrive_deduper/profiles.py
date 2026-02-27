@@ -33,11 +33,6 @@ def load_profile(name: str) -> dict:
     return {}
 
 
-def get_profile_credentials_path(name: str) -> Path:
-    """Return the credentials.json path for a profile."""
-    return get_profile_dir(name) / "credentials.json"
-
-
 def get_profile_token_path(name: str) -> Path:
     """Return the token.json path for a profile."""
     return get_profile_dir(name) / "token.json"

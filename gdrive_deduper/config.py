@@ -7,7 +7,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from gdrive_deduper.profiles import load_profile, get_profile_credentials_path, get_profile_token_path, get_profile_output_dir
+from gdrive_deduper.profiles import load_profile, get_profile_token_path, get_profile_output_dir
 
 # Load .env file if present
 load_dotenv()
@@ -118,8 +118,6 @@ def get_config_value(key: str, cli_value: Any = None) -> Any:
 
 def get_credentials_path(cli_value: str = None) -> Path:
     """Get credentials file path."""
-    if cli_value is None and active_profile:
-        return get_profile_credentials_path(active_profile)
     path = get_config_value("credentials_path", cli_value)
     return expand_path(path)
 
