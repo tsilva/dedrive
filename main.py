@@ -1109,135 +1109,123 @@ def create_ui():
     with gr.Blocks(title="Google Drive Deduplication Manager") as app:
         gr.Markdown("# Google Drive Deduplication Manager")
 
-        with gr.Tabs():
-            # =================================================================
-            # Tab 1: Scan
-            # =================================================================
-            with gr.Tab("Scan"):
-                gr.Markdown("### Scan Google Drive for Duplicates")
+        # Scan section
+        gr.Markdown("### Scan Google Drive for Duplicates")
 
-                with gr.Row():
-                    path_input = gr.Textbox(
-                        label="Path Filter (optional)",
-                        placeholder="/Photos or leave empty for all files",
-                        scale=3,
-                    )
-                    scan_btn = gr.Button("Run Scan", variant="primary", scale=1)
+        with gr.Row():
+            path_input = gr.Textbox(
+                label="Path Filter (optional)",
+                placeholder="/Photos or leave empty for all files",
+                scale=3,
+            )
+            scan_btn = gr.Button("Run Scan", variant="primary", scale=1)
 
-                scan_status = gr.Textbox(label="Status", interactive=False)
-                scan_summary = gr.Markdown()
+        scan_status = gr.Textbox(label="Status", interactive=False)
+        scan_summary = gr.Markdown()
 
-            # =================================================================
-            # Tab 2: Review Duplicates
-            # =================================================================
-            with gr.Tab("Review Duplicates"):
-                # Navigation
-                with gr.Row():
-                    prev_btn = gr.Button("< Previous", scale=1)
-                    next_btn = gr.Button("Next >", scale=1)
+        # Review section
+        with gr.Row():
+            prev_btn = gr.Button("< Previous", scale=1)
+            next_btn = gr.Button("Next >", scale=1)
 
-                # Header
-                group_header = gr.Markdown("Run a scan to see duplicates.")
+        group_header = gr.Markdown("Run a scan to see duplicates.")
 
-                # Side-by-side comparison
-                with gr.Row():
-                    with gr.Column():
-                        gr.Markdown("### FILE A")
-                        path_a = gr.Textbox(show_label=False, interactive=False)
-                        preview_img_a = gr.Image(label="Preview", height=300, visible=True)
-                        preview_code_a = gr.Code(label="Preview", language="json", visible=False, lines=12)
-                        metadata_a = gr.Markdown()
+        with gr.Row():
+            with gr.Column():
+                gr.Markdown("### FILE A")
+                path_a = gr.Textbox(show_label=False, interactive=False)
+                preview_img_a = gr.Image(label="Preview", height=300, visible=True)
+                preview_code_a = gr.Code(label="Preview", language="json", visible=False, lines=12)
+                metadata_a = gr.Markdown()
 
-                    with gr.Column():
-                        gr.Markdown("### FILE B")
-                        path_b = gr.Textbox(show_label=False, interactive=False)
-                        preview_img_b = gr.Image(label="Preview", height=300, visible=True)
-                        preview_code_b = gr.Code(label="Preview", language="json", visible=False, lines=12)
-                        metadata_b = gr.Markdown()
+            with gr.Column():
+                gr.Markdown("### FILE B")
+                path_b = gr.Textbox(show_label=False, interactive=False)
+                preview_img_b = gr.Image(label="Preview", height=300, visible=True)
+                preview_code_b = gr.Code(label="Preview", language="json", visible=False, lines=12)
+                metadata_b = gr.Markdown()
 
-                # Action buttons
-                with gr.Row():
-                    keep_left_btn = gr.Button("Keep Left (A)", variant="primary", scale=1)
-                    keep_right_btn = gr.Button("Keep Right (B)", variant="primary", scale=1)
+        with gr.Row():
+            keep_left_btn = gr.Button("Keep Left (A)", variant="primary", scale=1)
+            keep_right_btn = gr.Button("Keep Right (B)", variant="primary", scale=1)
 
-                # Define outputs for review updates
-                review_outputs = [
-                    group_header,
-                    path_a, path_b,
-                    preview_img_a, preview_code_a,
-                    preview_img_b, preview_code_b,
-                    metadata_a, metadata_b,
-                    keep_left_btn, keep_right_btn,
-                ]
+        review_outputs = [
+            group_header,
+            path_a, path_b,
+            preview_img_a, preview_code_a,
+            preview_img_b, preview_code_b,
+            metadata_a, metadata_b,
+            keep_left_btn, keep_right_btn,
+        ]
 
-                # Wire up events
-                scan_btn.click(
-                    fn=run_scan,
-                    inputs=[path_input],
-                    outputs=[scan_status, scan_summary],
-                ).then(
-                    fn=update_review_display,
-                    outputs=review_outputs,
-                )
+        # Wire up events
+        scan_btn.click(
+            fn=run_scan,
+            inputs=[path_input],
+            outputs=[scan_status, scan_summary],
+        ).then(
+            fn=update_review_display,
+            outputs=review_outputs,
+        )
 
-                prev_btn.click(
-                    fn=lambda: on_navigate("prev"),
-                    outputs=review_outputs,
-                )
+        prev_btn.click(
+            fn=lambda: on_navigate("prev"),
+            outputs=review_outputs,
+        )
 
-                next_btn.click(
-                    fn=lambda: on_navigate("next"),
-                    outputs=review_outputs,
-                )
+        next_btn.click(
+            fn=lambda: on_navigate("next"),
+            outputs=review_outputs,
+        )
 
-                keep_left_btn.click(
-                    fn=on_keep_left,
-                    outputs=review_outputs,
-                )
+        keep_left_btn.click(
+            fn=on_keep_left,
+            outputs=review_outputs,
+        )
 
-                keep_right_btn.click(
-                    fn=on_keep_right,
-                    outputs=review_outputs,
-                )
+        keep_right_btn.click(
+            fn=on_keep_right,
+            outputs=review_outputs,
+        )
 
-                # Execute Moves accordion
-                with gr.Accordion("Execute Moves", open=False):
-                    gr.Markdown("Files will be moved to `/_dupes/` preserving their original folder structure. This is non-destructive — files can be restored by moving them back.")
+        # Execute Moves accordion
+        with gr.Accordion("Execute Moves", open=False):
+            gr.Markdown("Files will be moved to `/_dupes/` preserving their original folder structure. This is non-destructive — files can be restored by moving them back.")
 
-                    with gr.Row():
-                        dry_run_btn = gr.Button("Preview (Dry Run)", variant="secondary", scale=1)
-                        execute_btn = gr.Button("Execute Moves", variant="primary", scale=1)
+            with gr.Row():
+                dry_run_btn = gr.Button("Preview (Dry Run)", variant="secondary", scale=1)
+                execute_btn = gr.Button("Execute Moves", variant="primary", scale=1)
 
-                    confirm_checkbox = gr.Checkbox(
-                        label="I understand this will move files in my Google Drive",
-                        value=False,
-                    )
+            confirm_checkbox = gr.Checkbox(
+                label="I understand this will move files in my Google Drive",
+                value=False,
+            )
 
-                    execution_status = gr.Markdown()
-                    execution_results = gr.Dataframe(
-                        headers=["Status", "Source Path", "Destination Path", "Details"],
-                        datatype=["str", "str", "str", "str"],
-                        interactive=False,
-                    )
+            execution_status = gr.Markdown()
+            execution_results = gr.Dataframe(
+                headers=["Status", "Source Path", "Destination Path", "Details"],
+                datatype=["str", "str", "str", "str"],
+                interactive=False,
+            )
 
-                    dry_run_btn.click(
-                        fn=lambda: execute_moves(dry_run=True),
-                        outputs=[execution_status, execution_results],
-                    )
+            dry_run_btn.click(
+                fn=lambda: execute_moves(dry_run=True),
+                outputs=[execution_status, execution_results],
+            )
 
-                    def execute_with_confirmation(confirmed: bool):
-                        if not confirmed:
-                            return "Please check the confirmation box before executing.", []
-                        return execute_moves(dry_run=False)
+            def execute_with_confirmation(confirmed: bool):
+                if not confirmed:
+                    return "Please check the confirmation box before executing.", []
+                return execute_moves(dry_run=False)
 
-                    execute_btn.click(
-                        fn=execute_with_confirmation,
-                        inputs=[confirm_checkbox],
-                        outputs=[execution_status, execution_results],
-                    ).then(
-                        fn=lambda: gr.update(value=False),
-                        outputs=[confirm_checkbox],
-                    )
+            execute_btn.click(
+                fn=execute_with_confirmation,
+                inputs=[confirm_checkbox],
+                outputs=[execution_status, execution_results],
+            ).then(
+                fn=lambda: gr.update(value=False),
+                outputs=[confirm_checkbox],
+            )
 
         # Load initial display on startup if scan results exist
         app.load(
