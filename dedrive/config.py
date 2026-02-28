@@ -71,7 +71,7 @@ def expand_path(path: str) -> Path:
 def load_config() -> dict:
     """Load configuration from config file if it exists.
 
-    Checks cwd config.json first, then falls back to ~/.gdrive-deduper/config.json.
+    Checks cwd config.json first, then falls back to ~/.dedrive/config.json.
     """
     for config_path in [Path(CONFIG_FILE), PROFILES_DIR / CONFIG_FILE]:
         if config_path.exists():
@@ -137,7 +137,7 @@ def get_config_value(key: str, cli_value: Any = None) -> Any:
 def get_credentials_path(cli_value: str = None) -> Path:
     """Get credentials file path.
 
-    Falls back to ~/.gdrive-deduper/credentials.json when the default
+    Falls back to ~/.dedrive/credentials.json when the default
     credentials.json doesn't exist in cwd.
     """
     path = get_config_value("credentials_path", cli_value)
@@ -252,8 +252,8 @@ def get_exclude_paths(cli_excludes: list[str] = None) -> list[str]:
 def create_default_config():
     """Create a default config file with all available options."""
     default_config = {
-        "# credentials_path": "~/.config/gdrive-deduper/credentials.json",
-        "# token_path": "~/.config/gdrive-deduper/token.json",
+        "# credentials_path": "~/.config/dedrive/credentials.json",
+        "# token_path": "~/.config/dedrive/token.json",
         "# output_dir": ".output",
         "# dupes_folder": "/_dupes",
         "# batch_size": 100,

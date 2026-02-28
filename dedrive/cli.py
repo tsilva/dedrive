@@ -1,4 +1,4 @@
-"""CLI entry point for gdrive-deduper."""
+"""CLI entry point for dedrive."""
 
 import argparse
 import logging
@@ -101,7 +101,7 @@ def cmd_logout(args):
         else:
             print("Multiple logged-in profiles found. Specify one with --profile:")
             for name in logged_in:
-                print(f"  gdrive-deduper logout --profile {name}")
+                print(f"  dedrive logout --profile {name}")
             sys.exit(1)
 
     deleted = delete_profile_token(profile)
@@ -115,7 +115,7 @@ def cmd_list_profiles(args):
     """Handle --list-profiles."""
     profiles = list_profiles()
     if not profiles:
-        print("No profiles found. Run 'gdrive-deduper login' to create one.")
+        print("No profiles found. Run 'dedrive login' to create one.")
         return
 
     print("Profiles:")
@@ -130,7 +130,7 @@ def cmd_ui(args):
     if not args.profile:
         profiles = list_profiles()
         if not profiles:
-            print("No profiles found. Run 'gdrive-deduper login' first.")
+            print("No profiles found. Run 'dedrive login' first.")
             sys.exit(1)
 
         logged_in = [
@@ -187,7 +187,7 @@ def cmd_ui(args):
 def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(
-        prog="gdrive-deduper",
+        prog="dedrive",
         description="Google Drive Deduplication Manager",
     )
     parser.add_argument(

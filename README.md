@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.png" alt="gdrive-deduper" width="512"/>
+  <img src="logo.png" alt="dedrive" width="512"/>
 
   [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
   [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -132,8 +132,8 @@ Create `config.json` in the project root:
 
 ```json
 {
-  "credentials_path": "~/.config/gdrive-deduper/credentials.json",
-  "output_dir": "~/.local/share/gdrive-deduper",
+  "credentials_path": "~/.config/dedrive/credentials.json",
+  "output_dir": "~/.local/share/dedrive",
   "dupes_folder": "/_dupes",
   "batch_size": 100,
   "exclude_paths": ["/Backup/Old", "/tmp"]

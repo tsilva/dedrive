@@ -232,7 +232,7 @@ def authenticate(credentials_path: Path) -> Credentials:
         logger.error("  4. Create OAuth 2.0 Client ID (choose 'Desktop app')")
         logger.error("  5. Download the JSON file")
         logger.error(f"  6. Save it as: {credentials_path}")
-        logger.error(f"     Or save it to: ~/.gdrive-deduper/credentials.json")
+        logger.error(f"     Or save it to: ~/.dedrive/credentials.json")
         logger.error("")
         logger.error("Or set GDRIVE_CREDENTIALS_PATH to use a different location.")
         sys.exit(1)

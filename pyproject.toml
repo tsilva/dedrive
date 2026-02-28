@@ -1,5 +1,5 @@
 [project]
-name = "gdrive-deduper"
+name = "dedrive"
 version = "0.1.0"
 description = "Find duplicate files in Google Drive using MD5 checksums"
 requires-python = ">=3.10"
@@ -18,7 +18,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-gdrive-deduper = "gdrive_deduper.cli:main"
+dedrive = "dedrive.cli:main"
 
 [tool.ruff]
 line-length = 100
