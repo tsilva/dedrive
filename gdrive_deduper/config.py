@@ -38,12 +38,6 @@ def set_active_profile_from_email(email: str) -> str:
     return email
 
 
-def clear_active_profile():
-    """Reset the active profile to None."""
-    global active_profile, _profile_config
-    active_profile = None
-    _profile_config = {}
-
 # Default configuration values
 DEFAULTS = {
     "credentials_path": "credentials.json",

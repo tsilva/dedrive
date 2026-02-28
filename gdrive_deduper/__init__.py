@@ -32,7 +32,6 @@ from gdrive_deduper.config import (
     get_max_preview_size,
     set_active_profile,
     set_active_profile_from_email,
-    clear_active_profile,
     create_default_config,
     print_config,
 )
@@ -73,7 +72,6 @@ __all__ = [
     "get_max_preview_size",
     "set_active_profile",
     "set_active_profile_from_email",
-    "clear_active_profile",
     "create_default_config",
     "print_config",
     # profiles

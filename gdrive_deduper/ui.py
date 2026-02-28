@@ -443,7 +443,6 @@ def check_login_complete():
     )
 
 
-
 def try_auto_login():
     """Attempt auto-login on app load if profile has a valid token."""
     from gdrive_deduper.config import active_profile
@@ -681,6 +680,20 @@ def run_scan(progress=gr.Progress()):
 """
 
     return status, summary
+
+
+def auto_start_scan(progress=gr.Progress()):
+    """Auto-start scan after login. No-op if not logged in."""
+    if not state.service:
+        return "", ""
+    return run_scan(progress)
+
+
+def show_review_after_scan():
+    """Show review section after scan completes. No-op if no scan data."""
+    if not state.duplicate_groups:
+        return (gr.update(),) + update_review_display()
+    return (gr.update(visible=True),) + update_review_display()
 
 
 # =============================================================================
@@ -1305,118 +1318,107 @@ def create_ui():
         with gr.Column(visible=False) as main_section:
             user_info_display = gr.Markdown()
 
-            # Scan section
-            gr.Markdown("### Scan Google Drive for Duplicates")
-
-            scan_btn = gr.Button("Run Scan", variant="primary")
-
+            # Scan status (visible during scan)
             scan_status = gr.Textbox(label="Status", interactive=False)
             scan_summary = gr.Markdown()
 
-            # Review section
-            with gr.Row():
-                prev_btn = gr.Button("< Previous", scale=1)
-                next_btn = gr.Button("Next >", scale=1)
+            # Review + Execute section (hidden until scan completes)
+            with gr.Column(visible=False) as review_section:
+                # Review section
+                with gr.Row():
+                    prev_btn = gr.Button("< Previous", scale=1)
+                    next_btn = gr.Button("Next >", scale=1)
 
-            group_header = gr.Markdown("Run a scan to see duplicates.")
-
-            with gr.Row():
-                with gr.Column():
-                    gr.Markdown("### FILE A")
-                    path_a = gr.Textbox(show_label=False, interactive=False)
-                    preview_img_a = gr.Image(label="Preview", height=300, visible=True)
-                    preview_code_a = gr.Code(label="Preview", language="json", visible=False, lines=12)
-                    metadata_a = gr.Markdown()
-
-                with gr.Column():
-                    gr.Markdown("### FILE B")
-                    path_b = gr.Textbox(show_label=False, interactive=False)
-                    preview_img_b = gr.Image(label="Preview", height=300, visible=True)
-                    preview_code_b = gr.Code(label="Preview", language="json", visible=False, lines=12)
-                    metadata_b = gr.Markdown()
-
-            with gr.Row():
-                keep_left_btn = gr.Button("Keep Left (A)", variant="primary", scale=1)
-                keep_right_btn = gr.Button("Keep Right (B)", variant="primary", scale=1)
-
-            review_outputs = [
-                group_header,
-                path_a, path_b,
-                preview_img_a, preview_code_a,
-                preview_img_b, preview_code_b,
-                metadata_a, metadata_b,
-                keep_left_btn, keep_right_btn,
-            ]
-
-            # Wire up scan/review events
-            scan_btn.click(
-                fn=run_scan,
-                outputs=[scan_status, scan_summary],
-            ).then(
-                fn=update_review_display,
-                outputs=review_outputs,
-            )
-
-            prev_btn.click(
-                fn=lambda: on_navigate("prev"),
-                outputs=review_outputs,
-            )
-
-            next_btn.click(
-                fn=lambda: on_navigate("next"),
-                outputs=review_outputs,
-            )
-
-            keep_left_btn.click(
-                fn=on_keep_left,
-                outputs=review_outputs,
-            )
-
-            keep_right_btn.click(
-                fn=on_keep_right,
-                outputs=review_outputs,
-            )
-
-            # Execute Moves accordion
-            with gr.Accordion("Execute Moves", open=False):
-                gr.Markdown("Files will be moved to `/_dupes/` preserving their original folder structure. This is non-destructive — files can be restored by moving them back.")
+                group_header = gr.Markdown("Run a scan to see duplicates.")
 
                 with gr.Row():
-                    dry_run_btn = gr.Button("Preview (Dry Run)", variant="secondary", scale=1)
-                    execute_btn = gr.Button("Execute Moves", variant="primary", scale=1)
+                    with gr.Column():
+                        gr.Markdown("### FILE A")
+                        path_a = gr.Textbox(show_label=False, interactive=False)
+                        preview_img_a = gr.Image(label="Preview", height=300, visible=True)
+                        preview_code_a = gr.Code(label="Preview", language="json", visible=False, lines=12)
+                        metadata_a = gr.Markdown()
 
-                confirm_checkbox = gr.Checkbox(
-                    label="I understand this will move files in my Google Drive",
-                    value=False,
+                    with gr.Column():
+                        gr.Markdown("### FILE B")
+                        path_b = gr.Textbox(show_label=False, interactive=False)
+                        preview_img_b = gr.Image(label="Preview", height=300, visible=True)
+                        preview_code_b = gr.Code(label="Preview", language="json", visible=False, lines=12)
+                        metadata_b = gr.Markdown()
+
+                with gr.Row():
+                    keep_left_btn = gr.Button("Keep Left (A)", variant="primary", scale=1)
+                    keep_right_btn = gr.Button("Keep Right (B)", variant="primary", scale=1)
+
+                review_outputs = [
+                    group_header,
+                    path_a, path_b,
+                    preview_img_a, preview_code_a,
+                    preview_img_b, preview_code_b,
+                    metadata_a, metadata_b,
+                    keep_left_btn, keep_right_btn,
+                ]
+
+                prev_btn.click(
+                    fn=lambda: on_navigate("prev"),
+                    outputs=review_outputs,
                 )
 
-                execution_status = gr.Markdown()
-                execution_results = gr.Dataframe(
-                    headers=["Status", "Source Path", "Destination Path", "Details"],
-                    datatype=["str", "str", "str", "str"],
-                    interactive=False,
+                next_btn.click(
+                    fn=lambda: on_navigate("next"),
+                    outputs=review_outputs,
                 )
 
-                dry_run_btn.click(
-                    fn=lambda: execute_moves(dry_run=True),
-                    outputs=[execution_status, execution_results],
+                keep_left_btn.click(
+                    fn=on_keep_left,
+                    outputs=review_outputs,
                 )
 
-                def execute_with_confirmation(confirmed: bool):
-                    if not confirmed:
-                        return "Please check the confirmation box before executing.", []
-                    return execute_moves(dry_run=False)
-
-                execute_btn.click(
-                    fn=execute_with_confirmation,
-                    inputs=[confirm_checkbox],
-                    outputs=[execution_status, execution_results],
-                ).then(
-                    fn=lambda: gr.update(value=False),
-                    outputs=[confirm_checkbox],
+                keep_right_btn.click(
+                    fn=on_keep_right,
+                    outputs=review_outputs,
                 )
 
-        # --- Login/Logout Event Wiring ---
+                # Execute Moves accordion
+                with gr.Accordion("Execute Moves", open=False):
+                    gr.Markdown("Files will be moved to `/_dupes/` preserving their original folder structure. This is non-destructive — files can be restored by moving them back.")
+
+                    with gr.Row():
+                        dry_run_btn = gr.Button("Preview (Dry Run)", variant="secondary", scale=1)
+                        execute_btn = gr.Button("Execute Moves", variant="primary", scale=1)
+
+                    confirm_checkbox = gr.Checkbox(
+                        label="I understand this will move files in my Google Drive",
+                        value=False,
+                    )
+
+                    execution_status = gr.Markdown()
+                    execution_results = gr.Dataframe(
+                        headers=["Status", "Source Path", "Destination Path", "Details"],
+                        datatype=["str", "str", "str", "str"],
+                        interactive=False,
+                    )
+
+                    dry_run_btn.click(
+                        fn=lambda: execute_moves(dry_run=True),
+                        outputs=[execution_status, execution_results],
+                    )
+
+                    def execute_with_confirmation(confirmed: bool):
+                        if not confirmed:
+                            return "Please check the confirmation box before executing.", []
+                        return execute_moves(dry_run=False)
+
+                    execute_btn.click(
+                        fn=execute_with_confirmation,
+                        inputs=[confirm_checkbox],
+                        outputs=[execution_status, execution_results],
+                    ).then(
+                        fn=lambda: gr.update(value=False),
+                        outputs=[confirm_checkbox],
+                    )
+
+        # --- Login Event Wiring ---
         login_btn.click(
             fn=start_login,
             outputs=[login_status, login_btn, login_timer],
@@ -1425,12 +1427,24 @@ def create_ui():
         login_timer.tick(
             fn=check_login_complete,
             outputs=[login_status, login_btn, login_timer, login_section, main_section, user_info_display],
+        ).then(
+            fn=auto_start_scan,
+            outputs=[scan_status, scan_summary],
+        ).then(
+            fn=show_review_after_scan,
+            outputs=[review_section] + review_outputs,
         )
 
-        # Auto-login on app load
+        # Auto-login on app load (triggers auto-scan if already logged in)
         app.load(
             fn=try_auto_login,
             outputs=[login_section, main_section, login_status, user_info_display],
+        ).then(
+            fn=auto_start_scan,
+            outputs=[scan_status, scan_summary],
+        ).then(
+            fn=show_review_after_scan,
+            outputs=[review_section] + review_outputs,
         )
 
     return app
