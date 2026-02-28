@@ -671,7 +671,7 @@ def run_scan(progress=gr.Progress()):
 
     summary = f"""### Results Summary
 
-- **Total files scanned:** {total_files:,}
+- **Total files scanned:** {total_files:,} (owned files only)
 - **Duplicate groups:** {total_groups:,}
 - **Duplicate pairs:** {total_pairs:,}
 - **Uncertain groups:** {uncertain:,} (same MD5, different size)

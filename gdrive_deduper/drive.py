@@ -279,13 +279,18 @@ def fetch_with_retry(service, **kwargs) -> dict:
 
 
 def fetch_all_files(service) -> list[dict]:
-    """Fetch all files from My Drive and Shared with me, with pagination."""
+    """Fetch all owned files from Google Drive, with pagination.
+
+    Excludes files shared with the user since they don't count towards
+    the user's storage quota.
+    """
     all_files = []
     page_token = None
     page_count = 0
 
     fields = "nextPageToken, files(id, name, md5Checksum, size, parents, createdTime, modifiedTime, mimeType)"
-    query = "trashed = false"
+    query = "trashed = false and 'me' in owners"
+    logger.info("Fetching owned files only (excluding shared files)")
 
     while True:
         page_count += 1
