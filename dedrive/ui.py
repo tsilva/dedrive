@@ -13,7 +13,7 @@ import gradio as gr
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-from gdrive_deduper import (
+from dedrive import (
     SCOPES,
     authenticate,
     create_oauth_flow,
@@ -445,7 +445,7 @@ def check_login_complete():
 
 def try_auto_login():
     """Attempt auto-login on app load if profile has a valid token."""
-    from gdrive_deduper.config import active_profile
+    from dedrive.config import active_profile
 
     if not active_profile:
         # No profile set, show login UI

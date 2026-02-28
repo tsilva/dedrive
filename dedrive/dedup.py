@@ -4,7 +4,7 @@ import csv
 import logging
 from collections import defaultdict
 
-from gdrive_deduper.drive import get_path
+from dedrive.drive import get_path
 
 # Setup logging
 logger = logging.getLogger(__name__)

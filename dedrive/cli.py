@@ -5,13 +5,13 @@ import logging
 import sys
 import webbrowser
 
-from gdrive_deduper.config import (
+from dedrive.config import (
     get_credentials_path,
     get_token_path,
     set_active_profile,
     set_active_profile_from_email,
 )
-from gdrive_deduper.drive import (
+from dedrive.drive import (
     create_oauth_flow,
     run_oauth_callback_server,
     save_token,
@@ -20,7 +20,7 @@ from gdrive_deduper.drive import (
     setup_logging,
     authenticate,
 )
-from gdrive_deduper.profiles import (
+from dedrive.profiles import (
     list_profiles,
     get_profile_token_path,
     delete_profile_token,
@@ -178,8 +178,8 @@ def cmd_ui(args):
             logger.error(f"Credential validation failed: {e}")
             sys.exit(1)
 
-    from gdrive_deduper.ui import create_ui
-    from gdrive_deduper.config import get_output_dir
+    from dedrive.ui import create_ui
+    from dedrive.config import get_output_dir
     app = create_ui()
     app.launch(share=args.share, server_port=args.port, allowed_paths=[str(get_output_dir())])
 

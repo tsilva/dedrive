@@ -13,7 +13,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.errors import HttpError
 
-from gdrive_deduper.config import get_token_path
+from dedrive.config import get_token_path
 
 # Setup logging
 logger = logging.getLogger(__name__)

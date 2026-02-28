@@ -1,6 +1,6 @@
 """Google Drive Deduplication Tool - package API."""
 
-from gdrive_deduper.drive import (
+from dedrive.drive import (
     SCOPES,
     setup_logging,
     authenticate,
@@ -14,7 +14,7 @@ from gdrive_deduper.drive import (
     build_lookups,
     get_path,
 )
-from gdrive_deduper.dedup import (
+from dedrive.dedup import (
     filter_by_path,
     filter_excluded_paths,
     find_duplicates,
@@ -22,7 +22,7 @@ from gdrive_deduper.dedup import (
     calculate_savings,
     format_size,
 )
-from gdrive_deduper.config import (
+from dedrive.config import (
     get_exclude_paths,
     get_credentials_path,
     get_token_path,
@@ -35,7 +35,7 @@ from gdrive_deduper.config import (
     create_default_config,
     print_config,
 )
-from gdrive_deduper.profiles import (
+from dedrive.profiles import (
     init_profile,
     list_profiles,
     delete_profile_token,
