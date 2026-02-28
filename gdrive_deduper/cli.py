@@ -127,15 +127,27 @@ def cmd_list_profiles(args):
 
 def cmd_ui(args):
     """Handle the default command (launch Gradio UI)."""
-    if args.profile:
-        set_active_profile(args.profile)
+    if not args.profile:
+        print("Error: --profile is required to launch the UI.")
+        print()
+        profiles = list_profiles()
+        if profiles:
+            print("Available profiles:")
+            for name in profiles:
+                token_path = get_profile_token_path(name)
+                status = " (logged in)" if token_path.exists() else ""
+                print(f"  {name}{status}")
+            print()
+            print("Usage: gdrive-deduper --profile <name>")
+        else:
+            print("No profiles found. Run 'gdrive-deduper login' first.")
+        sys.exit(1)
+
+    set_active_profile(args.profile)
 
     setup_logging(verbose=args.verbose, log_file=args.log_file)
 
     if args.validate:
-        if not args.profile:
-            print("Error: --validate requires --profile")
-            sys.exit(1)
         logger = logging.getLogger(__name__)
         credentials_path = get_credentials_path()
         try:
