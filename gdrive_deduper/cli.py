@@ -173,10 +173,12 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
 
     # login subcommand
-    subparsers.add_parser("login", help="Authenticate with Google (opens browser)")
+    login_parser = subparsers.add_parser("login", help="Authenticate with Google (opens browser)")
+    login_parser.add_argument("--profile", "-P", default=argparse.SUPPRESS, help="Use a named profile")
 
     # logout subcommand
-    subparsers.add_parser("logout", help="Remove saved authentication token")
+    logout_parser = subparsers.add_parser("logout", help="Remove saved authentication token")
+    logout_parser.add_argument("--profile", "-P", default=argparse.SUPPRESS, help="Use a named profile")
 
     # UI flags (only apply when no subcommand)
     parser.add_argument(
