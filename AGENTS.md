@@ -8,32 +8,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies
 uv sync
 
-# Launch the Gradio web UI (--profile is required)
-uv run main.py --profile work
+# Install as standalone CLI tool
+uv tool install . --editable
+
+# Login (opens browser, auto-creates profile from email)
+gdrive-deduper login
+
+# Logout
+gdrive-deduper logout
+
+# List profiles with login status
+gdrive-deduper --list-profiles
+
+# Launch the Gradio web UI (auto-detects logged-in profile)
+gdrive-deduper
 
 # Launch on a custom port
-uv run main.py --profile work --port 8080
+gdrive-deduper --port 8080
 
 # Enable public sharing link
-uv run main.py --profile work --share
+gdrive-deduper --share
 
 # Enable verbose/debug logging
-uv run main.py --profile work --verbose
+gdrive-deduper --verbose
 
 # Write logs to file
-uv run main.py --profile work --log-file debug.log
+gdrive-deduper --log-file debug.log
 
 # Validate credentials without launching UI
-uv run main.py --profile work --validate
+gdrive-deduper --profile work --validate
 
-# Create a profile (for multiple Google accounts)
-uv run main.py --init-profile work
-
-# List profiles
+# Backward-compatible: run via main.py
+uv run main.py login
 uv run main.py --list-profiles
-
-# Profile with other flags
-uv run main.py --profile work --verbose --port 8080
 ```
 
 **Note:** PDF preview in the web UI requires poppler: `brew install poppler` (macOS)
@@ -86,15 +93,24 @@ Example `.env` file:
 GDRIVE_EXCLUDE_PATHS=/documentor-puzzle/export,/Backup/Old
 ```
 
+### Config File Fallback
+
+`config.json` is checked in cwd first, then falls back to `~/.gdrive-deduper/config.json`.
+
+### Credentials Fallback
+
+`credentials.json` is checked in cwd first, then falls back to `~/.gdrive-deduper/credentials.json`.
+
 ### Profiles
 
-Profiles allow targeting multiple Google Drive accounts. Each profile is a subfolder under `./profiles/` with its own credentials, token, config, and output data.
+Profiles allow targeting multiple Google Drive accounts. Each profile is a subfolder under `~/.gdrive-deduper/` with its own credentials, token, config, and output data. Profiles are auto-created on `gdrive-deduper login` using the Google account email as the profile name.
 
 ```
-profiles/
-  work/
+~/.gdrive-deduper/
+  credentials.json     # Shared OAuth client credentials (fallback)
+  config.json          # Shared config (fallback)
+  user@gmail.com/
     config.yaml        # Profile settings (YAML)
-    credentials.json   # OAuth client credentials
     token.json         # OAuth token (auto-generated)
     .output/           # Scan results, decisions, logs
 ```
@@ -102,7 +118,6 @@ profiles/
 Example `config.yaml`:
 
 ```yaml
-# profiles/work/config.yaml
 dupes_folder: /_dupes
 batch_size: 100
 max_preview_mb: 10
@@ -115,16 +130,28 @@ When `--profile <name>` is used, `config.py` resolves credentials, token, and ou
 
 ## Architecture
 
-Gradio-based web UI (`main.py`) for finding and managing duplicate files in Google Drive.
+Installable CLI tool (`gdrive-deduper`) with a Gradio web UI for finding and managing duplicate files in Google Drive.
+
+**Package structure:**
+- `gdrive_deduper/cli.py` — CLI entry point with `login`, `logout` subcommands and Gradio launcher
+- `gdrive_deduper/ui.py` — Gradio web UI (all UI code, dataclasses, helpers)
+- `gdrive_deduper/drive.py` — Google Drive authentication, API fetch, path resolution
+- `gdrive_deduper/dedup.py` — Duplicate detection logic
+- `gdrive_deduper/config.py` — Configuration management with fallback chain
+- `gdrive_deduper/profiles.py` — Profile management (profiles stored in `~/.gdrive-deduper/`)
+- `main.py` — Thin wrapper for backward compatibility (`uv run main.py`)
 
 **Features:**
+- **CLI:** `login` (browser-based OAuth), `logout` (remove token), `--list-profiles`
 - **Scan Tab:** Run scans with progress feedback
 - **Review Tab:** Side-by-side file comparison with previews, make keep/skip decisions
 - **Export Tab:** Preview and execute moves, export decisions.json
-- **CLI arguments:** Profile management (`--profile`, `--init-profile`, `--list-profiles`), credential validation (`--validate`), logging (`--verbose`, `--log-file`), Gradio options (`--port`, `--share`)
+- **CLI flags:** Profile selection (`--profile`), credential validation (`--validate`), logging (`--verbose`, `--log-file`), Gradio options (`--port`, `--share`)
 
 **Key design decisions:**
-- `--profile` is required; authentication happens at startup before Gradio launches
+- Profiles auto-created on login using Google account email as name
+- Profiles stored in `~/.gdrive-deduper/` (works when installed as standalone CLI)
+- `login` subcommand opens browser for OAuth without importing Gradio
 - Uses `drive` scope (full access for file moves)
 - Fetches all files in one query then filters locally (faster than recursive folder traversal)
 - Path resolution uses memoization (`path_cache`) for efficiency

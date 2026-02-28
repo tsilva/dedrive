@@ -1,7 +1,0 @@
-# Profile configuration
-dupes_folder: /_dupes
-batch_size: 100
-max_preview_mb: 10
-exclude_paths:
-  - /Backup/Old
-  - /tmp

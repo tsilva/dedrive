@@ -13,6 +13,13 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+gdrive-deduper = "gdrive_deduper.cli:main"
+
 [tool.ruff]
 line-length = 100
 

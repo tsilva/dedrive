@@ -7,7 +7,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from gdrive_deduper.profiles import load_profile, get_profile_token_path, get_profile_output_dir, init_profile
+from gdrive_deduper.profiles import load_profile, get_profile_token_path, get_profile_output_dir, init_profile, PROFILES_DIR
 
 # Load .env file if present
 load_dotenv()
@@ -75,19 +75,22 @@ def expand_path(path: str) -> Path:
 
 
 def load_config() -> dict:
-    """Load configuration from config file if it exists."""
-    config_path = Path(CONFIG_FILE)
-    if config_path.exists():
-        try:
-            with open(config_path) as f:
-                return json.load(f)
-        except json.JSONDecodeError as e:
-            print(f"Error: Invalid JSON in {CONFIG_FILE}: {e}")
-            print(f"Please fix the syntax in {CONFIG_FILE} or delete it to use defaults.")
-        except PermissionError:
-            print(f"Error: Cannot read {CONFIG_FILE} - permission denied.")
-        except Exception as e:
-            print(f"Warning: Failed to load {CONFIG_FILE}: {e}")
+    """Load configuration from config file if it exists.
+
+    Checks cwd config.json first, then falls back to ~/.gdrive-deduper/config.json.
+    """
+    for config_path in [Path(CONFIG_FILE), PROFILES_DIR / CONFIG_FILE]:
+        if config_path.exists():
+            try:
+                with open(config_path) as f:
+                    return json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"Error: Invalid JSON in {config_path}: {e}")
+                print(f"Please fix the syntax in {config_path} or delete it to use defaults.")
+            except PermissionError:
+                print(f"Error: Cannot read {config_path} - permission denied.")
+            except Exception as e:
+                print(f"Warning: Failed to load {config_path}: {e}")
     return {}
 
 
@@ -138,9 +141,18 @@ def get_config_value(key: str, cli_value: Any = None) -> Any:
 
 
 def get_credentials_path(cli_value: str = None) -> Path:
-    """Get credentials file path."""
+    """Get credentials file path.
+
+    Falls back to ~/.gdrive-deduper/credentials.json when the default
+    credentials.json doesn't exist in cwd.
+    """
     path = get_config_value("credentials_path", cli_value)
-    return expand_path(path)
+    resolved = expand_path(path)
+    if not resolved.exists() and path == DEFAULTS["credentials_path"]:
+        fallback = PROFILES_DIR / "credentials.json"
+        if fallback.exists():
+            return fallback
+    return resolved
 
 
 def get_token_path(credentials_path: Path = None) -> Path:

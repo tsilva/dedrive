@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-PROFILES_DIR = Path("profiles")
+PROFILES_DIR = Path.home() / ".gdrive-deduper"
 
 CONFIG_TEMPLATE = """\
 # Profile configuration
