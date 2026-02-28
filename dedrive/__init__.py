@@ -1,5 +1,7 @@
 """Google Drive Deduplication Tool - package API."""
 
+__version__ = "0.1.0"
+
 from dedrive.drive import (
     SCOPES,
     setup_logging,
@@ -42,6 +44,7 @@ from dedrive.profiles import (
 )
 
 __all__ = [
+    "__version__",
     # drive
     "SCOPES",
     "setup_logging",
