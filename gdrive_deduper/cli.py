@@ -128,20 +128,37 @@ def cmd_list_profiles(args):
 def cmd_ui(args):
     """Handle the default command (launch Gradio UI)."""
     if not args.profile:
-        print("Error: --profile is required to launch the UI.")
-        print()
         profiles = list_profiles()
-        if profiles:
-            print("Available profiles:")
-            for name in profiles:
-                token_path = get_profile_token_path(name)
-                status = " (logged in)" if token_path.exists() else ""
-                print(f"  {name}{status}")
-            print()
-            print("Usage: gdrive-deduper --profile <name>")
-        else:
+        if not profiles:
             print("No profiles found. Run 'gdrive-deduper login' first.")
-        sys.exit(1)
+            sys.exit(1)
+
+        logged_in = [
+            name for name in profiles
+            if get_profile_token_path(name).exists()
+        ]
+
+        if len(logged_in) == 1:
+            args.profile = logged_in[0]
+            print(f"Using profile: {args.profile}")
+        else:
+            display = logged_in if logged_in else profiles
+            print("Select a profile:")
+            for i, name in enumerate(display, 1):
+                status = " (logged in)" if name in logged_in else ""
+                print(f"  {i}) {name}{status}")
+            print()
+            try:
+                choice = input("Enter number: ").strip()
+                idx = int(choice) - 1
+                if 0 <= idx < len(display):
+                    args.profile = display[idx]
+                else:
+                    print("Invalid selection.")
+                    sys.exit(1)
+            except (ValueError, EOFError, KeyboardInterrupt):
+                print()
+                sys.exit(1)
 
     set_active_profile(args.profile)
 
