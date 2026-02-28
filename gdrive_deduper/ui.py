@@ -36,8 +36,6 @@ from gdrive_deduper import (
     get_batch_size,
     get_max_preview_size,
     set_active_profile_from_email,
-    clear_active_profile,
-    delete_profile_token,
 )
 
 
@@ -444,34 +442,6 @@ def check_login_complete():
         gr.update(),
     )
 
-
-def do_logout():
-    """Log out: delete token, reset state, switch to login UI."""
-    if state.user_email:
-        from gdrive_deduper.config import active_profile
-        if active_profile:
-            delete_profile_token(active_profile)
-
-    # Reset state
-    state.service = None
-    state.user_email = ""
-    state.user_name = ""
-    state.all_files = []
-    state.files_by_id = {}
-    state.path_cache = {}
-    state.duplicate_groups = []
-    state.current_index = 0
-    state.filtered_indices = []
-    state.filter_status = "pending"
-    state.decisions = {}
-    clear_active_profile()
-
-    return (
-        gr.update(visible=True),  # login_section
-        gr.update(visible=False),  # main_section
-        gr.update(value="Sign in to manage your Google Drive duplicates.", visible=True),  # login_status
-        gr.update(visible=True),  # login_btn
-    )
 
 
 def try_auto_login():
@@ -1333,9 +1303,7 @@ def create_ui():
 
         # --- Main Section (hidden until logged in) ---
         with gr.Column(visible=False) as main_section:
-            with gr.Row():
-                user_info_display = gr.Markdown()
-                logout_btn = gr.Button("Sign Out", variant="secondary", scale=0, min_width=100)
+            user_info_display = gr.Markdown()
 
             # Scan section
             gr.Markdown("### Scan Google Drive for Duplicates")
@@ -1457,11 +1425,6 @@ def create_ui():
         login_timer.tick(
             fn=check_login_complete,
             outputs=[login_status, login_btn, login_timer, login_section, main_section, user_info_display],
-        )
-
-        logout_btn.click(
-            fn=do_logout,
-            outputs=[login_section, main_section, login_status, login_btn],
         )
 
         # Auto-login on app load
