@@ -162,8 +162,9 @@ def cmd_ui(args):
             sys.exit(1)
 
     from gdrive_deduper.ui import create_ui
+    from gdrive_deduper.config import get_output_dir
     app = create_ui()
-    app.launch(share=args.share, server_port=args.port)
+    app.launch(share=args.share, server_port=args.port, allowed_paths=[str(get_output_dir())])
 
 
 def main():
