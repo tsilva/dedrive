@@ -1,6 +1,6 @@
 """Google Drive Deduplication Tool - package API."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from dedrive.drive import (
     SCOPES,
