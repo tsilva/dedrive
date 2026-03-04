@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dedrive — Google Drive Duplicate Manager</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d0d;
+      --surface: #1a1a1a;
+      --surface-2: #222;
+      --border: #2a2a2a;
+      --text: #e5e5e5;
+      --text-dim: #888;
+      --accent: #3b82f6;
+      --accent-keep: #22c55e;
+      --accent-skip: #6b7280;
+      --accent-warning: #eab308;
+      --accent-danger: #ef4444;
+      --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --radius: 6px;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    code, .mono { font-family: var(--mono); font-size: 0.85em; }
+
+    /* Layout */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .logo {
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--text);
+    }
+
+    .nav {
+      display: flex;
+      gap: 4px;
+    }
+
+    .nav-item {
+      padding: 6px 14px;
+      font-size: 13px;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-radius: var(--radius);
+      transition: all 0.15s;
+      user-select: none;
+    }
+
+    .nav-item:hover { color: var(--text); background: var(--surface-2); }
+    .nav-item.active { color: var(--text); background: var(--border); }
+
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px 24px;
+    }
+
+    .screen { display: none; max-width: 960px; margin: 0 auto; }
+    .screen.active { display: block; }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-family: var(--sans);
+      font-weight: 500;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface-2);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn:hover { border-color: var(--text-dim); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { opacity: 0.9; border-color: var(--accent); }
+
+    .btn-keep { border-color: var(--accent-keep); color: var(--accent-keep); }
+    .btn-keep.active {
+      background: var(--accent-keep);
+      color: #000;
+      font-weight: 600;
+    }
+
+    .btn-skip { border-color: var(--accent-skip); color: var(--accent-skip); }
+    .btn-skip.active {
+      background: var(--accent-skip);
+      color: #fff;
+    }
+
+    .btn-danger { border-color: var(--accent-danger); color: var(--accent-danger); }
+
+    /* Forms */
+    .input {
+      padding: 8px 12px;
+      font-size: 14px;
+      font-family: var(--mono);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      width: 100%;
+      outline: none;
+    }
+    .input:focus { border-color: var(--accent); }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+
+    /* Setup */
+    .setup-container {
+      max-width: 480px;
+      margin: 60px auto;
+    }
+
+    .setup-title {
+      font-family: var(--mono);
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .setup-desc {
+      color: var(--text-dim);
+      font-size: 14px;
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    .setup-steps {
+      margin-top: 24px;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .setup-steps h3 {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+
+    .setup-steps ol {
+      padding-left: 20px;
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.8;
+    }
+
+    /* Login / User */
+    .login-container { max-width: 480px; margin: 60px auto; text-align: center; }
+
+    .user-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      text-align: left;
+      margin-bottom: 20px;
+    }
+
+    .user-avatar { width: 40px; height: 40px; border-radius: 50%; }
+    .user-name { font-weight: 600; font-size: 14px; }
+    .user-email { font-size: 13px; color: var(--text-dim); font-family: var(--mono); }
+
+    .login-actions { display: flex; gap: 8px; justify-content: center; }
+
+    /* Progress bar */
+    .progress-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      height: 4px;
+      margin-bottom: 12px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.3s;
+      width: 0;
+    }
+
+    .progress-bar.indeterminate {
+      width: 100%;
+      animation: indeterminate 1.5s infinite;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    }
+
+    @keyframes indeterminate {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    .progress-label {
+      font-size: 13px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .stat {
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 4px;
+    }
+
+    .stat-warning .stat-value { color: var(--accent-warning); }
+
+    /* Review */
+    .review-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .filter-tabs { display: flex; gap: 4px; }
+
+    .filter-btn {
+      padding: 5px 12px;
+      font-size: 12px;
+      font-family: var(--mono);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .filter-btn.active { background: var(--border); color: var(--text); }
+
+    .review-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .review-nav-label {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text-dim);
+      min-width: 60px;
+      text-align: center;
+    }
+
+    .group-header {
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .group-md5 {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .group-info {
+      font-size: 14px;
+      font-weight: 500;
+      margin-top: 4px;
+    }
+
+    .group-warning {
+      font-size: 12px;
+      color: var(--accent-warning);
+      margin-top: 4px;
+    }
+
+    .files-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .file-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color 0.15s;
+    }
+
+    .file-card.file-keep { border-color: var(--accent-keep); }
+
+    .file-preview {
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    .file-meta { padding: 12px; }
+
+    .file-name {
+      font-weight: 600;
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-path {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .file-details {
+      display: flex;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 8px;
+    }
+
+    .file-actions { padding: 0 12px 12px; }
+
+    .group-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    /* Previews */
+    .preview-image { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .preview-pdf { max-width: 100%; max-height: 100%; }
+    .preview-text {
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      padding: 12px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--text-dim);
+      white-space: pre;
+      text-align: left;
+    }
+    .preview-loading, .preview-error, .preview-none {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 12px;
+    }
+    .preview-icon { font-size: 32px; margin-bottom: 8px; }
+    .preview-open {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+
+    /* Execute */
+    .dry-run-header {
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+
+    .dry-run-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    .dry-run-table th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .dry-run-table td {
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .path-cell { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+
+    .dry-run-total {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 24px;
+    }
+
+    .confirm-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+
+    .confirm-row input[type="checkbox"] { accent-color: var(--accent-danger); }
+
+    .execute-summary {
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 24px;
+    }
+
+    .execute-errors { margin-top: 12px; }
+    .error-header { font-size: 13px; color: var(--accent-danger); font-weight: 600; }
+    .error-item { font-size: 12px; color: var(--text-dim); font-family: var(--mono); padding: 2px 0; }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+
+    .section-gap { margin-top: 24px; }
+
+    /* Keyboard shortcuts legend */
+    .shortcuts {
+      display: flex;
+      gap: 16px;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 16px;
+      justify-content: center;
+    }
+
+    .shortcuts kbd {
+      display: inline-block;
+      padding: 1px 5px;
+      font-family: var(--mono);
+      font-size: 11px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      margin-right: 2px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .main { padding: 20px 16px; }
+      .files-grid { grid-template-columns: 1fr; }
+      .review-toolbar { flex-direction: column; align-items: stretch; }
+      .header { padding: 10px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="logo">DEDRIVE</div>
+      <nav class="nav">
+        <div class="nav-item" data-screen="setup">Setup</div>
+        <div class="nav-item" data-screen="login">Account</div>
+        <div class="nav-item" data-screen="scan">Scan</div>
+        <div class="nav-item" data-screen="review">Review</div>
+        <div class="nav-item" data-screen="execute">Execute</div>
+      </nav>
+    </header>
+
+    <div class="main">
+      <!-- Setup -->
+      <div class="screen active" id="screen-setup">
+        <div class="setup-container">
+          <div class="setup-title">Setup</div>
+          <div class="setup-desc">
+            Dedrive finds and manages duplicate files in your Google Drive.
+            It runs entirely in your browser &mdash; no data leaves your machine.
+          </div>
+          <form id="setup-form">
+            <div class="form-group">
+              <label class="form-label" for="client-id-input">OAuth Client ID</label>
+              <input class="input" id="client-id-input" type="text" placeholder="123456789.apps.googleusercontent.com" required />
+            </div>
+            <button type="submit" class="btn btn-primary">Save &amp; Continue</button>
+          </form>
+          <div class="setup-steps">
+            <h3>How to get a Client ID</h3>
+            <ol>
+              <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console &rarr; Credentials</a></li>
+              <li>Create a new project (or select existing)</li>
+              <li>Enable the <strong>Google Drive API</strong></li>
+              <li>Configure the <strong>OAuth consent screen</strong> (External, add your email as test user)</li>
+              <li>Create an <strong>OAuth 2.0 Client ID</strong> (type: Web application)</li>
+              <li>Add your site URL as an <strong>Authorized JavaScript origin</strong> (e.g. <code>http://localhost:8000</code>)</li>
+              <li>Copy the Client ID and paste it above</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <!-- Login -->
+      <div class="screen" id="screen-login">
+        <div class="login-container">
+          <div class="setup-title" style="margin-bottom: 24px;">Account</div>
+          <div id="user-info"></div>
+          <div class="login-actions">
+            <button class="btn btn-primary" id="sign-in-btn">Sign in with Google</button>
+            <button class="btn" id="sign-out-btn" style="display:none">Sign Out</button>
+            <button class="btn btn-primary" id="start-scan-btn" style="display:none">Start Scan</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scan -->
+      <div class="screen" id="screen-scan">
+        <div class="setup-title" style="margin-bottom: 24px;">Scan</div>
+        <div class="progress-container">
+          <div class="progress-bar" id="scan-progress-bar"></div>
+        </div>
+        <div class="progress-label" id="scan-progress-label">Ready to scan</div>
+        <div id="scan-results" style="display:none"></div>
+        <div class="section-gap">
+          <button class="btn btn-primary" id="review-btn" style="display:none">Review Duplicates</button>
+        </div>
+      </div>
+
+      <!-- Review -->
+      <div class="screen" id="screen-review">
+        <div class="review-toolbar">
+          <div class="filter-tabs">
+            <button class="filter-btn active" data-filter="pending">Pending <span id="count-pending">0</span></button>
+            <button class="filter-btn" data-filter="decided">Decided <span id="count-decided">0</span></button>
+            <button class="filter-btn" data-filter="skipped">Skipped <span id="count-skipped">0</span></button>
+            <button class="filter-btn" data-filter="all">All <span id="count-all">0</span></button>
+          </div>
+          <div class="review-nav">
+            <button class="btn" id="prev-group">&larr;</button>
+            <span class="review-nav-label" id="review-nav-label">0 / 0</span>
+            <button class="btn" id="next-group">&rarr;</button>
+          </div>
+        </div>
+        <div id="review-content">
+          <div class="empty-state">Run a scan first to review duplicates</div>
+        </div>
+        <div class="shortcuts">
+          <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> navigate</span>
+          <span><kbd>1</kbd> <kbd>2</kbd> keep file</span>
+          <span><kbd>S</kbd> skip</span>
+        </div>
+        <div class="section-gap" style="text-align:center;">
+          <button class="btn btn-primary" id="go-execute-btn">Execute Moves</button>
+          <button class="btn" id="export-btn">Export Decisions</button>
+          <button class="btn" id="import-btn">Import Decisions</button>
+          <input type="file" id="import-file" accept=".json" style="display:none" />
+        </div>
+      </div>
+
+      <!-- Execute -->
+      <div class="screen" id="screen-execute">
+        <div class="setup-title" style="margin-bottom: 24px;">Execute</div>
+        <div id="execute-dry-run"></div>
+        <div id="execute-confirm-section" style="display:none">
+          <div class="confirm-row">
+            <input type="checkbox" id="execute-confirm" />
+            <label for="execute-confirm">I understand these files will be moved to <code>_dupes/</code></label>
+          </div>
+          <div class="progress-container">
+            <div class="progress-bar" id="execute-progress-bar"></div>
+          </div>
+          <div class="progress-label" id="execute-progress-label"></div>
+          <button class="btn btn-danger" id="execute-btn">Move Files</button>
+        </div>
+        <div id="execute-results" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
