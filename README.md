@@ -132,3 +132,7 @@ lib/
 ⭐ **Found this useful? [Give it a star](https://github.com/tsilva/dedrive-web)** ⭐
 
 </div>
+
+## License
+
+MIT
