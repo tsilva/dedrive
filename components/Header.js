@@ -7,7 +7,7 @@ const SCREENS = [
   { id: 'execute', label: 'Execute' },
 ];
 
-export default function Header({ screen }) {
+export default function Header({ screen, user }) {
   const getScreenStatus = (id) => {
     const order = ['account', 'scan', 'review', 'execute'];
     const currentIdx = order.indexOf(screen);
@@ -33,6 +33,14 @@ export default function Header({ screen }) {
           );
         })}
       </nav>
+      {user && (
+        <div className="user-info">
+          {user.photoLink && (
+            <img src={user.photoLink} alt="" className="user-avatar" />
+          )}
+          <span className="user-email">{user.emailAddress}</span>
+        </div>
+      )}
     </header>
   );
 }

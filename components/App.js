@@ -118,7 +118,7 @@ export default function App() {
         onLoad={handleGsiLoad}
         strategy="afterInteractive"
       />
-      <Header screen={screen} />
+      <Header screen={screen} user={user} />
       <div className="main">
         {screen === 'account' && (
           <AccountScreen

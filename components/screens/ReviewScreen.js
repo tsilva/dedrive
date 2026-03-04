@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { formatSize, formatDate } from '@/lib/utils';
 import { setSetting, getSetting } from '@/lib/state';
+import { prefetchPreview } from '@/lib/preview';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import FilePreview from '@/components/FilePreview';
 
@@ -45,7 +46,26 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
 
   useKeyboardShortcuts(!!group, keyboardHandlers);
 
-  // Check if review is complete
+  // Prefetch previews for upcoming groups (next 2 groups)
+  useEffect(() => {
+    if (!pendingGroups.length) return;
+    
+    const PREFETCH_AHEAD = 2;
+    const filesToPrefetch = [];
+    
+    for (let i = 1; i <= PREFETCH_AHEAD; i++) {
+      const nextIndex = currentIndex + i;
+      if (nextIndex < pendingGroups.length) {
+        const nextGroup = pendingGroups[nextIndex];
+        filesToPrefetch.push(...nextGroup.files);
+      }
+    }
+    
+    // Prefetch in the background without blocking
+    filesToPrefetch.forEach(file => {
+      prefetchPreview(file).catch(() => {});
+    });
+  }, [currentIndex, pendingGroups]);
   useEffect(() => {
     if (pendingGroups.length === 0 && dupGroups.length > 0) {
       // All groups reviewed, auto-advance to execute
