@@ -99,6 +99,29 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   white-space: nowrap;
 }
 
+.github-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: 16px;
+  color: var(--text-dim);
+  border-radius: var(--radius);
+  transition: all 0.15s;
+}
+
+.github-link:hover {
+  color: var(--text);
+  background: var(--surface-2);
+  text-decoration: none;
+}
+
+.github-icon {
+  width: 20px;
+  height: 20px;
+}
+
 .main {
   flex: 1;
   overflow-y: auto;
@@ -690,6 +713,32 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   border: 1px solid var(--border);
   border-radius: 3px;
   margin-right: 2px;
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 11px;
+}
+
+.footer-version {
+  display: flex;
+  gap: 8px;
+  color: var(--text-dim);
+}
+
+.footer-hash {
+  font-family: var(--mono);
+}
+
+.footer-date {
+  color: var(--text-dim);
+  opacity: 0.7;
 }
 
 /* Responsive */

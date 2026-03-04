@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import Script from 'next/script';
 import Header from './Header';
+import Footer from './Footer';
 import AccountScreen from './screens/AccountScreen';
 import ScanScreen from './screens/ScanScreen';
 import ReviewScreen from './screens/ReviewScreen';
@@ -148,6 +149,7 @@ export default function App() {
           <ExecuteScreen dupGroups={dupGroups} decisions={decisions} />
         )}
       </div>
+      <Footer />
     </div>
   );
 }
