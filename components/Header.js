@@ -1,7 +1,6 @@
 'use client';
 
 const SCREENS = [
-  { id: 'setup', label: 'Setup' },
   { id: 'account', label: 'Account' },
   { id: 'scan', label: 'Scan' },
   { id: 'review', label: 'Review' },

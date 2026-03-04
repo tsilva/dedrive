@@ -3,12 +3,10 @@
 import { useState, useCallback, useEffect } from 'react';
 import Script from 'next/script';
 import Header from './Header';
-import SetupScreen from './screens/SetupScreen';
 import AccountScreen from './screens/AccountScreen';
 import ScanScreen from './screens/ScanScreen';
 import ReviewScreen from './screens/ReviewScreen';
 import ExecuteScreen from './screens/ExecuteScreen';
-import { useSettings } from '@/hooks/useSettings';
 import { useDecisions } from '@/hooks/useDecisions';
 import { useScanResults } from '@/hooks/useScanResults';
 import { initAuth, signIn, signOut, setAuthCallback } from '@/lib/auth';
@@ -16,14 +14,15 @@ import { getUserInfo, fetchAllFiles } from '@/lib/drive';
 import { findDuplicates, resolvePaths, computeStats } from '@/lib/dedup';
 import { clearPreviewCache } from '@/lib/preview';
 
+const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
 export default function App() {
-  const [screen, setScreen] = useState('setup');
+  const [screen, setScreen] = useState('account');
   const [gsiLoaded, setGsiLoaded] = useState(false);
   const [user, setUser] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState({ page: 0, fileCount: 0 });
   const [scanError, setScanError] = useState(null);
-  const [settings, updateSettings] = useSettings();
   const [decisions, setDecision, reloadDecisions] = useDecisions();
   const { dupGroups, loaded, save } = useScanResults();
 
@@ -42,38 +41,25 @@ export default function App() {
         }
       } else {
         setUser(null);
-        setScreen('setup');
+        setScreen('account');
       }
     });
   }, []);
 
-  // Auto-init auth when GSI loads and client ID exists
+  // Auto-init auth when GSI loads
   useEffect(() => {
-    if (gsiLoaded && settings.clientId) {
+    if (gsiLoaded && CLIENT_ID) {
       try {
-        initAuth(settings.clientId);
-        setScreen('account');
+        initAuth(CLIENT_ID);
       } catch (e) {
         console.error('Auth init failed:', e);
       }
     }
-  }, [gsiLoaded, settings.clientId]);
+  }, [gsiLoaded]);
 
   const handleGsiLoad = useCallback(() => {
     setGsiLoaded(true);
   }, []);
-
-  const handleSaveClientId = useCallback((clientId) => {
-    updateSettings({ clientId });
-    if (gsiLoaded) {
-      try {
-        initAuth(clientId);
-        setScreen('account');
-      } catch (e) {
-        console.error('Auth init failed:', e);
-      }
-    }
-  }, [gsiLoaded, updateSettings]);
 
   const handleSignIn = useCallback(() => {
     signIn();
@@ -83,7 +69,7 @@ export default function App() {
     signOut();
     clearPreviewCache();
     setUser(null);
-    setScreen('setup');
+    setScreen('account');
   }, []);
 
   const handleStartScan = useCallback(async () => {
@@ -125,9 +111,6 @@ export default function App() {
       />
       <Header screen={screen} onNavigate={setScreen} />
       <div className="main">
-        {screen === 'setup' && (
-          <SetupScreen clientId={settings.clientId} onSave={handleSaveClientId} />
-        )}
         {screen === 'account' && (
           <AccountScreen
             user={user}
