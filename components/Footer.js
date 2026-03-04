@@ -7,8 +7,8 @@ export default function Footer() {
   return (
     <footer className="footer">
       <span className="footer-version mono">
-        {hash && <span className="footer-hash">{hash}</span>}
-        {date && <span className="footer-date">{date}</span>}
+        {hash && <span className="footer-hash">release {hash.slice(0, 7)}</span>}
+        {date && <span className="footer-date">· {date}</span>}
       </span>
     </footer>
   );

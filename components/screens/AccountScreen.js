@@ -5,6 +5,21 @@ export default function AccountScreen({ user, onSignIn, onSignOut, onStartScan }
     <div className="screen">
       <div className="login-container">
         <div className="setup-title" style={{ marginBottom: 24 }}>Account</div>
+        {!user && (
+          <div style={{ marginBottom: 24, color: '#666', lineHeight: 1.5 }}>
+            <p style={{ marginBottom: 12 }}>
+              This app finds duplicate files in your Google Drive by analyzing file checksums.
+            </p>
+            <p>
+              After signing in, you can:
+            </p>
+            <ul style={{ margin: '8px 0 0 20px', color: '#666' }}>
+              <li>Scan your entire Drive for duplicates</li>
+              <li>Review duplicate groups and choose which to keep</li>
+              <li>Move duplicates to a <code>_dupes</code> folder</li>
+            </ul>
+          </div>
+        )}
         {user && (
           <div className="user-card">
             {user.photoLink && (

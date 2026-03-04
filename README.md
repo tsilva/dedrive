@@ -1,6 +1,7 @@
 <div align="center">
   <img src="logo.png" alt="dedrive-web" width="512"/>
 
+  [![Live Demo](https://img.shields.io/badge/Live-dedrive.tsilva.eu-green?style=flat-square&logo=vercel)](https://dedrive.tsilva.eu)
   [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js)](https://nextjs.org/)
   [![License](https://img.shields.io/badge/License-ISC-blue?style=flat-square)](LICENSE)
   [![JavaScript](https://img.shields.io/badge/JavaScript-ES2022-F7DF1E?style=flat-square&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
