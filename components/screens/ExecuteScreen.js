@@ -98,7 +98,6 @@ export default function ExecuteScreen({ canWrite, decisions, dupGroups, onReques
     }
   }
 
-  const succeeded = results?.filter((r) => r.ok).length ?? 0;
   const failed = results?.filter((r) => !r.ok) ?? [];
 
   return (
@@ -165,7 +164,7 @@ export default function ExecuteScreen({ canWrite, decisions, dupGroups, onReques
             </label>
           </div>
 
-          {(executing || progress.total > 0) && (
+          {executing && (
             <>
               <div className="progress-container">
                 <div
@@ -179,20 +178,22 @@ export default function ExecuteScreen({ canWrite, decisions, dupGroups, onReques
             </>
           )}
 
-          <button
-            className="btn btn-danger"
-            onClick={handleExecute}
-            disabled={!confirmed || executing || !canWrite}
-          >
-            Move Files
-          </button>
+          {!executing && !results && (
+            <button
+              className="btn btn-danger"
+              onClick={handleExecute}
+              disabled={!confirmed || !canWrite}
+            >
+              Move Files
+            </button>
+          )}
         </>
       )}
 
       {results && (
         <div>
           <div className="execute-summary">
-            Moved {succeeded} of {results.length} files
+            {failed.length === 0 ? 'Move complete.' : `Move complete with ${failed.length} failure${failed.length === 1 ? '' : 's'}.`}
           </div>
           {failed.length > 0 && (
             <div className="execute-errors">
