@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Script from 'next/script';
 import Header from './Header';
@@ -33,6 +33,7 @@ export default function App() {
   const [screen, setScreen] = useState('account');
   const [gsiLoaded, setGsiLoaded] = useState(false);
   const [user, setUser] = useState(null);
+  const [authNotice, setAuthNotice] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [canWrite, setCanWrite] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -40,7 +41,6 @@ export default function App() {
   const [scanError, setScanError] = useState(null);
   const { decisions, setDecision, clearDecisions } = useDecisions();
   const { dupGroups, save, clear: clearScanResults } = useScanResults();
-  const autoSignInAttemptedRef = useRef(false);
 
   const stats = dupGroups.length > 0 ? computeStats(dupGroups) : null;
 
@@ -59,6 +59,7 @@ export default function App() {
       clearWorkflowState();
       setUser(null);
       setCanWrite(false);
+      setAuthNotice(null);
       setAuthError('Your Google session expired. Sign in again.');
       setScreen('account');
     });
@@ -82,6 +83,7 @@ export default function App() {
 
   const handleSignIn = useCallback(async () => {
     trackEvent('sign_in_started');
+    setAuthNotice(null);
     setAuthError(null);
 
     try {
@@ -107,6 +109,7 @@ export default function App() {
     clearWorkflowState();
     setUser(null);
     setCanWrite(false);
+    setAuthNotice(null);
     setAuthError(null);
     setScreen('account');
   }, [clearWorkflowState]);
@@ -114,6 +117,7 @@ export default function App() {
   const handleStartScan = useCallback(async () => {
     trackEvent('scan_started');
     clearWorkflowState();
+    setAuthNotice(null);
     setAuthError(null);
     setScreen('scan');
     setScanning(true);
@@ -170,20 +174,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get('start') !== 'signin') {
-      autoSignInAttemptedRef.current = false;
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    if (!gsiLoaded || user || screen !== 'account') return;
     if (searchParams.get('start') !== 'signin') return;
-    if (autoSignInAttemptedRef.current) return;
+    if (user || screen !== 'account') return;
 
-    autoSignInAttemptedRef.current = true;
     router.replace(pathname);
-    void handleSignIn();
-  }, [gsiLoaded, handleSignIn, pathname, router, screen, searchParams, user]);
+    setAuthError(null);
+    setAuthNotice('You are now on the secure app. Click Sign in with Google to continue.');
+  }, [pathname, router, screen, searchParams, user]);
 
   return (
     <div className="app">
@@ -197,6 +194,7 @@ export default function App() {
         {screen === 'account' && (
           <AccountScreen
             error={authError}
+            notice={authNotice}
             user={user}
             onSignIn={handleSignIn}
             onSignOut={handleSignOut}

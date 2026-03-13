@@ -456,11 +456,24 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   background: rgba(127, 29, 29, 0.25);
 }
 
+.account-notice-info {
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #bfdbfe;
+  background: rgba(30, 64, 175, 0.22);
+}
+
 .signed-in-actions {
   display: flex;
   flex-direction: column;
   gap: 16px;
   align-items: center;
+}
+
+.account-helper {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
 }
 
 .btn-large {
