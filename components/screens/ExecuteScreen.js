@@ -5,6 +5,7 @@ import { formatSize } from '@/lib/utils';
 import { getSettings } from '@/lib/state';
 import { moveFile, ensureFolderPath } from '@/lib/drive';
 import { pooledMap } from '@/lib/utils';
+import { trackEvent, trackException } from '@/lib/analytics';
 
 export default function ExecuteScreen({ dupGroups, decisions }) {
   const [confirmed, setConfirmed] = useState(false);
@@ -30,6 +31,9 @@ export default function ExecuteScreen({ dupGroups, decisions }) {
   async function handleExecute() {
     if (moves.length === 0 || !confirmed) return;
 
+    trackEvent('execute_started', {
+      move_count: moves.length,
+    });
     setExecuting(true);
     setResults(null);
     completedRef.current = 0;
@@ -60,6 +64,15 @@ export default function ExecuteScreen({ dupGroups, decisions }) {
 
     setResults(moveResults);
     setExecuting(false);
+    const failedCount = moveResults.filter((result) => !result.ok).length;
+    trackEvent('execute_completed', {
+      move_count: moves.length,
+      success_count: moveResults.length - failedCount,
+      failure_count: failedCount,
+    });
+    if (failedCount > 0) {
+      trackException('execute_partial_failure');
+    }
   }
 
   const succeeded = results?.filter((r) => r.ok).length ?? 0;

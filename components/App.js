@@ -15,6 +15,7 @@ import { getUserInfo, fetchAllFiles } from '@/lib/drive';
 import { findDuplicates, resolvePaths, computeStats } from '@/lib/dedup';
 import { setSetting, clearDecisions } from '@/lib/state';
 import { clearPreviewCache } from '@/lib/preview';
+import { trackEvent, trackException } from '@/lib/analytics';
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
@@ -64,10 +65,12 @@ export default function App() {
   }, []);
 
   const handleSignIn = useCallback(() => {
+    trackEvent('sign_in_started');
     signIn();
   }, []);
 
   const handleSignOut = useCallback(() => {
+    trackEvent('sign_out');
     signOut();
     clearPreviewCache();
     clearDecisions();
@@ -78,6 +81,8 @@ export default function App() {
   }, [reloadDecisions]);
 
   const handleStartScan = useCallback(async () => {
+    trackEvent('scan_started');
+
     // Clear previous decisions and reset review progress
     clearDecisions();
     setSetting('reviewIndex', 0);
@@ -95,7 +100,15 @@ export default function App() {
 
       resolvePaths(allFiles);
       const groups = findDuplicates(allFiles);
+      const scanStats = computeStats(groups);
       await save(allFiles, groups);
+      trackEvent('scan_completed', {
+        file_count: allFiles.length,
+        duplicate_group_count: scanStats.totalGroups,
+        duplicate_file_count: scanStats.totalFiles,
+        uncertain_group_count: scanStats.uncertainCount,
+        potential_savings_bytes: scanStats.totalWasted,
+      });
       setScanning(false);
       // Auto-advance to review when scan completes
       if (groups.length > 0) {
@@ -104,13 +117,27 @@ export default function App() {
     } catch (e) {
       setScanError(e.message);
       setScanning(false);
+      trackException('scan_failed');
+      trackEvent('scan_failed', {
+        error_type: e.message?.split(':')[0] || 'unknown',
+      });
       console.error('Scan failed:', e);
     }
   }, [save, reloadDecisions]);
 
   const handleExecute = useCallback(() => {
+    const decidedGroups = dupGroups.filter((group) => decisions[group.md5]?.action === 'keep');
+    const moveCount = decidedGroups.reduce((count, group) => {
+      const keepId = decisions[group.md5]?.keep;
+      return count + group.files.filter((file) => file.id !== keepId).length;
+    }, 0);
+
+    trackEvent('review_completed', {
+      reviewed_group_count: dupGroups.length,
+      move_candidate_count: moveCount,
+    });
     setScreen('execute');
-  }, []);
+  }, [decisions, dupGroups]);
 
   return (
     <div className="app">

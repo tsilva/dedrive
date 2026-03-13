@@ -29,6 +29,7 @@ Google Drive doesn't tell you about duplicate files. Over time, copies pile up �
 - **Non-destructive** — duplicates are moved to a `_dupes/` folder, never deleted
 - **Export/import decisions** — save your review progress as JSON and resume later
 - **Persistent state** — scan results stored in IndexedDB, decisions in localStorage
+- **Google Analytics ready** — optional GA4 page and product-event tracking via `NEXT_PUBLIC_GA_MEASUREMENT_ID`
 
 ## 🚀 Getting Started
 
@@ -37,6 +38,7 @@ Google Drive doesn't tell you about duplicate files. Over time, copies pile up �
 - [Node.js](https://nodejs.org/) (v18+)
 - A Google Cloud project with the Drive API enabled
 - An OAuth 2.0 Client ID for a web application
+- Optional: a Google Analytics 4 measurement ID
 
 ### Quick Start
 
@@ -49,6 +51,8 @@ npm run dev    # open http://localhost:3000
 
 The setup script walks you through creating a GCP project, enabling the Drive API, configuring the OAuth consent screen, and generating a Client ID. It writes the credentials to `.env.local` automatically.
 
+If you also want GA4 locally, add `NEXT_PUBLIC_GA_MEASUREMENT_ID` to `.env.local` yourself.
+
 ### Manual Setup
 
 If you prefer to configure things yourself:
@@ -60,6 +64,7 @@ If you prefer to configure things yourself:
 
 ```
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 ```
 
 5. Install and run:
@@ -96,7 +101,7 @@ Files are grouped by MD5 checksum. Groups with mismatched file sizes are flagged
 ```
 app/
   page.js              # Entry point (client-only, SSR disabled)
-  layout.js            # Root layout with metadata
+  layout.js            # Root layout with metadata and analytics tags
   globals.css          # All styles
 
 components/
@@ -114,6 +119,7 @@ hooks/
 
 lib/
   auth.js              # Google Identity Services token client
+  analytics.js         # GA4 helper for product events
   drive.js             # Drive API v3 client with retry + pagination
   dedup.js             # MD5 grouping, path resolution, stats
   preview.js           # Lazy file preview with in-memory cache
