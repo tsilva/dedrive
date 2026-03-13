@@ -1,17 +1,18 @@
 import { useState, useCallback } from 'react';
-import { getDecisions, setDecision as persistDecision } from '@/lib/state';
 
 export function useDecisions() {
-  const [decisions, setDecisions] = useState(() => getDecisions());
+  const [decisions, setDecisions] = useState({});
 
   const setDecision = useCallback((md5, decision) => {
-    persistDecision(md5, decision);
-    setDecisions(getDecisions());
+    setDecisions((current) => ({
+      ...current,
+      [md5]: decision,
+    }));
   }, []);
 
-  const reload = useCallback(() => {
-    setDecisions(getDecisions());
+  const clearDecisions = useCallback(() => {
+    setDecisions({});
   }, []);
 
-  return [decisions, setDecision, reload];
+  return { decisions, setDecision, clearDecisions };
 }

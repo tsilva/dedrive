@@ -1,6 +1,6 @@
 'use client';
 
-export default function AccountScreen({ user, onSignIn, onSignOut, onStartScan }) {
+export default function AccountScreen({ error, user, onSignIn, onSignOut, onStartScan }) {
   return (
     <div className="screen">
       <div className="account-container">
@@ -13,7 +13,9 @@ export default function AccountScreen({ user, onSignIn, onSignOut, onStartScan }
             </svg>
           </div>
           <h1 className="account-title">dedrive</h1>
-          <p className="account-subtitle">Find and remove duplicate files in your Google Drive</p>
+          <p className="account-subtitle">
+            Review duplicates with read-only Drive access first. Write access is requested only when you move files.
+          </p>
         </div>
 
         {!user && (
@@ -52,11 +54,13 @@ export default function AccountScreen({ user, onSignIn, onSignOut, onStartScan }
               </div>
               <div className="feature-text">
                 <strong>Safe Cleanup</strong>
-                <span>Moves duplicates to _dupes folder — never deletes</span>
+                <span>Requests write access only for the final move into <code>_dupes/</code> and never deletes</span>
               </div>
             </div>
           </div>
         )}
+
+        {error && <div className="account-notice account-notice-error">{error}</div>}
 
         {user && (
           <div className="user-card">

@@ -10,10 +10,16 @@ import ReviewScreen from './screens/ReviewScreen';
 import ExecuteScreen from './screens/ExecuteScreen';
 import { useDecisions } from '@/hooks/useDecisions';
 import { useScanResults } from '@/hooks/useScanResults';
-import { initAuth, signIn, signOut, setAuthCallback } from '@/lib/auth';
+import {
+  hasWriteAccess,
+  initAuth,
+  requestReadAccess,
+  requestWriteAccess,
+  setAuthCallback,
+  signOut,
+} from '@/lib/auth';
 import { getUserInfo, fetchAllFiles } from '@/lib/drive';
 import { findDuplicates, resolvePaths, computeStats } from '@/lib/dedup';
-import { setSetting, clearDecisions } from '@/lib/state';
 import { clearPreviewCache } from '@/lib/preview';
 import { trackEvent, trackException } from '@/lib/analytics';
 
@@ -23,31 +29,36 @@ export default function App() {
   const [screen, setScreen] = useState('account');
   const [gsiLoaded, setGsiLoaded] = useState(false);
   const [user, setUser] = useState(null);
+  const [authError, setAuthError] = useState(null);
+  const [canWrite, setCanWrite] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState({ page: 0, fileCount: 0 });
   const [scanError, setScanError] = useState(null);
-  const [decisions, setDecision, reloadDecisions] = useDecisions();
-  const { dupGroups, loaded, save } = useScanResults();
+  const { decisions, setDecision, clearDecisions } = useDecisions();
+  const { dupGroups, save, clear: clearScanResults } = useScanResults();
 
   const stats = dupGroups.length > 0 ? computeStats(dupGroups) : null;
 
+  const clearWorkflowState = useCallback(() => {
+    clearPreviewCache();
+    clearDecisions();
+    clearScanResults();
+    setScanning(false);
+    setScanProgress({ page: 0, fileCount: 0 });
+    setScanError(null);
+  }, [clearDecisions, clearScanResults]);
+
   // Auth callback
   useEffect(() => {
-    setAuthCallback(async (signedIn) => {
-      if (signedIn) {
-        try {
-          const u = await getUserInfo();
-          setUser(u);
-          setScreen('account');
-        } catch (e) {
-          console.error('Failed to get user info:', e);
-        }
-      } else {
-        setUser(null);
-        setScreen('account');
-      }
+    setAuthCallback(() => {
+      clearWorkflowState();
+      setUser(null);
+      setCanWrite(false);
+      setAuthError('Your Google session expired. Sign in again.');
+      setScreen('account');
     });
-  }, []);
+    return () => setAuthCallback(null);
+  }, [clearWorkflowState]);
 
   // Auto-init auth when GSI loads
   useEffect(() => {
@@ -64,33 +75,43 @@ export default function App() {
     setGsiLoaded(true);
   }, []);
 
-  const handleSignIn = useCallback(() => {
+  const handleSignIn = useCallback(async () => {
     trackEvent('sign_in_started');
-    signIn();
-  }, []);
+    setAuthError(null);
+
+    try {
+      await requestReadAccess();
+      const nextUser = await getUserInfo();
+      clearWorkflowState();
+      setUser(nextUser);
+      setCanWrite(hasWriteAccess());
+      setScreen('account');
+    } catch (error) {
+      signOut();
+      clearWorkflowState();
+      setUser(null);
+      setCanWrite(false);
+      setAuthError(error.message);
+      console.error('Sign in failed:', error);
+    }
+  }, [clearWorkflowState]);
 
   const handleSignOut = useCallback(() => {
     trackEvent('sign_out');
     signOut();
-    clearPreviewCache();
-    clearDecisions();
-    setSetting('reviewIndex', 0);
-    reloadDecisions();
+    clearWorkflowState();
     setUser(null);
+    setCanWrite(false);
+    setAuthError(null);
     setScreen('account');
-  }, [reloadDecisions]);
+  }, [clearWorkflowState]);
 
   const handleStartScan = useCallback(async () => {
     trackEvent('scan_started');
-
-    // Clear previous decisions and reset review progress
-    clearDecisions();
-    setSetting('reviewIndex', 0);
-    reloadDecisions();
-    
+    clearWorkflowState();
+    setAuthError(null);
     setScreen('scan');
     setScanning(true);
-    setScanError(null);
     setScanProgress({ page: 0, fileCount: 0 });
 
     try {
@@ -101,7 +122,7 @@ export default function App() {
       resolvePaths(allFiles);
       const groups = findDuplicates(allFiles);
       const scanStats = computeStats(groups);
-      await save(allFiles, groups);
+      save(allFiles, groups);
       trackEvent('scan_completed', {
         file_count: allFiles.length,
         duplicate_group_count: scanStats.totalGroups,
@@ -110,7 +131,6 @@ export default function App() {
         potential_savings_bytes: scanStats.totalWasted,
       });
       setScanning(false);
-      // Auto-advance to review when scan completes
       if (groups.length > 0) {
         setScreen('review');
       }
@@ -123,7 +143,7 @@ export default function App() {
       });
       console.error('Scan failed:', e);
     }
-  }, [save, reloadDecisions]);
+  }, [clearWorkflowState, save]);
 
   const handleExecute = useCallback(() => {
     const decidedGroups = dupGroups.filter((group) => decisions[group.md5]?.action === 'keep');
@@ -139,6 +159,11 @@ export default function App() {
     setScreen('execute');
   }, [decisions, dupGroups]);
 
+  const handleRequestWriteAccess = useCallback(async () => {
+    await requestWriteAccess();
+    setCanWrite(hasWriteAccess());
+  }, []);
+
   return (
     <div className="app">
       <Script
@@ -150,6 +175,7 @@ export default function App() {
       <div className="main">
         {screen === 'account' && (
           <AccountScreen
+            error={authError}
             user={user}
             onSignIn={handleSignIn}
             onSignOut={handleSignOut}
@@ -173,7 +199,12 @@ export default function App() {
           />
         )}
         {screen === 'execute' && (
-          <ExecuteScreen dupGroups={dupGroups} decisions={decisions} />
+          <ExecuteScreen
+            canWrite={canWrite}
+            decisions={decisions}
+            dupGroups={dupGroups}
+            onRequestWriteAccess={handleRequestWriteAccess}
+          />
         )}
       </div>
       <Footer />

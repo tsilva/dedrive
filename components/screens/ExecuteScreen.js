@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatSize } from '@/lib/utils';
 import { getSettings } from '@/lib/state';
 import { moveFile, ensureFolderPath } from '@/lib/drive';
 import { pooledMap } from '@/lib/utils';
 import { trackEvent, trackException } from '@/lib/analytics';
 
-export default function ExecuteScreen({ dupGroups, decisions }) {
+export default function ExecuteScreen({ canWrite, decisions, dupGroups, onRequestWriteAccess }) {
   const [confirmed, setConfirmed] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [grantingWriteAccess, setGrantingWriteAccess] = useState(false);
+  const [grantError, setGrantError] = useState(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState(null);
   const completedRef = useRef(0);
@@ -28,8 +30,29 @@ export default function ExecuteScreen({ dupGroups, decisions }) {
     return list;
   }, [dupGroups, decisions]);
 
+  useEffect(() => {
+    if (canWrite) {
+      setGrantError(null);
+    }
+  }, [canWrite]);
+
+  async function handleGrantWriteAccess() {
+    if (!onRequestWriteAccess) return;
+
+    setGrantError(null);
+    setGrantingWriteAccess(true);
+
+    try {
+      await onRequestWriteAccess();
+    } catch (error) {
+      setGrantError(error.message || 'Google did not grant write access.');
+    } finally {
+      setGrantingWriteAccess(false);
+    }
+  }
+
   async function handleExecute() {
-    if (moves.length === 0 || !confirmed) return;
+    if (moves.length === 0 || !confirmed || !canWrite) return;
 
     trackEvent('execute_started', {
       move_count: moves.length,
@@ -111,11 +134,30 @@ export default function ExecuteScreen({ dupGroups, decisions }) {
             Total: {formatSize(moves.reduce((s, m) => s + (parseInt(m.size) || 0), 0))}
           </div>
 
+          {!canWrite && (
+            <div className="permission-panel">
+              <div className="permission-panel-title">Write access is required to move files</div>
+              <div className="permission-panel-copy">
+                Scan and review used read-only Drive access. Grant write access now to move the selected duplicates
+                into <code>_dupes/</code>.
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={handleGrantWriteAccess}
+                disabled={grantingWriteAccess}
+              >
+                {grantingWriteAccess ? 'Requesting Access...' : 'Grant Write Access'}
+              </button>
+              {grantError && <div className="permission-panel-error">{grantError}</div>}
+            </div>
+          )}
+
           <div className="confirm-row">
             <input
               type="checkbox"
               id="execute-confirm"
               checked={confirmed}
+              disabled={!canWrite}
               onChange={(e) => setConfirmed(e.target.checked)}
             />
             <label htmlFor="execute-confirm">
@@ -140,7 +182,7 @@ export default function ExecuteScreen({ dupGroups, decisions }) {
           <button
             className="btn btn-danger"
             onClick={handleExecute}
-            disabled={!confirmed || executing}
+            disabled={!confirmed || executing || !canWrite}
           >
             Move Files
           </button>

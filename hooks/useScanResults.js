@@ -1,26 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
-import { saveScanResults, loadScanResults } from '@/lib/state';
+import { useState, useCallback } from 'react';
 
 export function useScanResults() {
   const [allFiles, setAllFiles] = useState([]);
   const [dupGroups, setDupGroups] = useState([]);
-  const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    loadScanResults().then((saved) => {
-      if (saved) {
-        setAllFiles(saved.files || []);
-        setDupGroups(saved.groups || []);
-      }
-      setLoaded(true);
-    });
-  }, []);
-
-  const save = useCallback(async (files, groups) => {
+  const save = useCallback((files, groups) => {
     setAllFiles(files);
     setDupGroups(groups);
-    await saveScanResults({ files, groups });
   }, []);
 
-  return { allFiles, dupGroups, loaded, save };
+  const clear = useCallback(() => {
+    setAllFiles([]);
+    setDupGroups([]);
+  }, []);
+
+  return { allFiles, dupGroups, save, clear };
 }

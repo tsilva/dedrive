@@ -2,7 +2,7 @@
 
 import { formatSize } from '@/lib/utils';
 
-export default function ScanScreen({ scanning, progress, stats }) {
+export default function ScanScreen({ scanning, progress, stats, error }) {
   return (
     <div className="screen">
       <div className="setup-title" style={{ marginBottom: 24 }}>Scan</div>
@@ -19,6 +19,12 @@ export default function ScanScreen({ scanning, progress, stats }) {
             ? `Scan complete • ${stats.totalGroups.toLocaleString()} duplicates found`
             : 'Ready to scan'}
       </div>
+
+      {error && (
+        <div className="account-notice account-notice-error" style={{ marginTop: 16 }}>
+          {error}
+        </div>
+      )}
 
       {stats && (
         <div className="stats-grid">

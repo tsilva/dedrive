@@ -2,23 +2,12 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { formatSize, formatDate } from '@/lib/utils';
-import { setSetting, getSetting } from '@/lib/state';
 import { prefetchPreview } from '@/lib/preview';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import FilePreview from '@/components/FilePreview';
 
-const REVIEW_INDEX_KEY = 'reviewIndex';
-
 export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecute }) {
-  // Load saved index or start at 0
-  const [currentIndex, setCurrentIndex] = useState(() => {
-    return getSetting(REVIEW_INDEX_KEY, 0);
-  });
-
-  // Save index whenever it changes
-  useEffect(() => {
-    setSetting(REVIEW_INDEX_KEY, currentIndex);
-  }, [currentIndex]);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   // Filter to only show groups that haven't been decided yet
   const pendingGroups = useMemo(() => {
@@ -41,12 +30,7 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
     if (!group || fileIndex >= group.files.length) return;
     const file = group.files[fileIndex];
     onDecision(group.md5, { keep: file.id, action: 'keep' });
-    // Auto-advance to next group using functional update to avoid stale closure issues
-    setCurrentIndex((i) => {
-      // pendingGroups will be recalculated after onDecision triggers re-render
-      // We need to be conservative here - don't advance if we're at the last item
-      return i + 1;
-    });
+    setCurrentIndex((i) => i + 1);
   }, [group, onDecision]);
 
   // Keyboard shortcuts: left = keep first file, right = keep second file
@@ -60,10 +44,10 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
   // Prefetch previews for upcoming groups (next 2 groups)
   useEffect(() => {
     if (!pendingGroups.length) return;
-    
+
     const PREFETCH_AHEAD = 2;
     const filesToPrefetch = [];
-    
+
     for (let i = 1; i <= PREFETCH_AHEAD; i++) {
       const nextIndex = currentIndex + i;
       if (nextIndex < pendingGroups.length) {
@@ -71,15 +55,14 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
         filesToPrefetch.push(...nextGroup.files);
       }
     }
-    
-    // Prefetch in the background without blocking
-    filesToPrefetch.forEach(file => {
+
+    filesToPrefetch.forEach((file) => {
       prefetchPreview(file).catch(() => {});
     });
   }, [currentIndex, pendingGroups]);
+
   useEffect(() => {
     if (pendingGroups.length === 0 && dupGroups.length > 0) {
-      // All groups reviewed, auto-advance to execute
       onExecute?.();
     }
   }, [pendingGroups.length, dupGroups.length, onExecute]);
