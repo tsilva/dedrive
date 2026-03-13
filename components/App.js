@@ -19,7 +19,7 @@ import {
   setAuthCallback,
   signOut,
 } from '@/lib/auth';
-import { getUserInfo, fetchAllFiles } from '@/lib/drive';
+import { clearFolderCache, getUserInfo, fetchAllFiles } from '@/lib/drive';
 import { findDuplicates, resolvePaths, computeStats } from '@/lib/dedup';
 import { clearPreviewCache } from '@/lib/preview';
 import { trackEvent, trackException } from '@/lib/analytics';
@@ -46,6 +46,7 @@ export default function App() {
 
   const clearWorkflowState = useCallback(() => {
     clearPreviewCache();
+    clearFolderCache();
     clearDecisions();
     clearScanResults();
     setScanning(false);
