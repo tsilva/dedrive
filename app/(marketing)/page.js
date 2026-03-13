@@ -11,6 +11,7 @@ export default function MarketingPage() {
           signInHref="/app?start=signin"
           signInHelper="You will be redirected to the secure app page, where you can sign in with Google."
           signInLabel="Start"
+          signInVariant="cta"
           user={null}
         />
       </div>
