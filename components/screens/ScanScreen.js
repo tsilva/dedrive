@@ -19,6 +19,9 @@ export default function ScanScreen({ scanning, progress, stats, error }) {
             ? `Scan complete • ${stats.totalGroups.toLocaleString()} duplicates found`
             : 'Ready to scan'}
       </div>
+      <div className="group-hint" style={{ marginTop: 12 }}>
+        Scans your owned, non-trashed Drive files and skips Shared with me items.
+      </div>
 
       {error && (
         <div className="account-notice account-notice-error" style={{ marginTop: 16 }}>

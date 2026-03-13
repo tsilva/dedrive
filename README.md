@@ -24,7 +24,7 @@ Google Drive doesn't tell you about duplicate files. Over time, copies pile up �
 - **100% client-side** — your files never leave your browser, no backend server involved
 - **Public landing + secure app split** — `/` stays public, `/app` hosts the privileged Drive workflow without analytics scripts
 - **Read-only first** — scan, review, and previews use `drive.readonly`; write access is requested only before moves
-- **Full Drive scan** — fetches all owned files via the Google Drive API with automatic pagination
+- **Full Drive scan** — fetches your owned, non-trashed files via the Google Drive API with automatic pagination, excluding Shared with me items
 - **Smart dedup** — groups files by MD5 checksum, skips Google Workspace files (Docs, Sheets, etc.)
 - **Visual review** — preview images, PDFs, and text files side-by-side before deciding
 - **Multi-file review** — every duplicate card gets a numbered keep badge, and the review can jump straight to execute with partial selections
@@ -88,7 +88,7 @@ npm run dev
 ```
 
 1. **Open `/app`** and sign in with your Google account using the read-only Drive scope
-2. **Scan** fetches all your owned, non-trashed files from Google Drive
+2. **Scan** fetches all your owned, non-trashed files from Google Drive, excluding Shared with me items
 3. **Review** presents duplicate groups sorted by wasted space so you can choose which copy to keep by clicking its numbered badge
 4. **Execute** asks for the full Drive scope only when you are ready to move the unchosen duplicates into `_dupes/`, preserving the original directory structure, and you can jump there before reviewing every group
 

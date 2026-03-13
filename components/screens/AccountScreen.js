@@ -58,7 +58,7 @@ export default function AccountScreen({
           </div>
           <h1 className="account-title">dedrive</h1>
           <p className="account-subtitle">
-            Review duplicates with read-only Drive access first. Write access is requested only when you move files.
+            Review duplicates with read-only Drive access first. Scans exclude Shared with me items, and write access is requested only when you move files.
           </p>
         </div>
 
