@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { formatSize, formatDate } from '@/lib/utils';
 import { prefetchPreview } from '@/lib/preview';
 import FilePreview from '@/components/FilePreview';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecute }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -39,6 +40,12 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
     const file = group.files[fileIndex];
     onDecision(group.md5, { keep: file.id, action: 'keep' });
   }, [group, onDecision]);
+
+  useKeyboardShortcuts({
+    enabled: Boolean(group),
+    maxIndex: group?.files.length ?? 0,
+    onSelectIndex: handleKeepByIndex,
+  });
 
   // Prefetch previews for upcoming groups (next 2 groups)
   useEffect(() => {
@@ -106,7 +113,7 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
           {group.files.length} files • {formatSize(group.wastedSize)} wasted
         </div>
         <div className="group-hint">
-          Click a numbered badge to keep that file and continue to the next group.
+          Click a numbered badge or press 1-9 to keep that file and continue to the next group.
         </div>
         {group.uncertain && (
           <div className="group-warning">Size mismatch - review carefully</div>

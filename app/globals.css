@@ -59,6 +59,13 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   gap: 4px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 32px;
+}
+
 .nav-item {
   padding: 6px 14px;
   font-size: 13px;
@@ -109,7 +116,6 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   justify-content: center;
   width: 32px;
   height: 32px;
-  margin-left: 16px;
   color: var(--text-dim);
   border-radius: 50%;
   transition: all 0.15s;
@@ -675,7 +681,7 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   width: 36px;
   height: 36px;
   border: 1px solid var(--accent-keep);
-  border-radius: 999px;
+  border-radius: 10px;
   background: rgba(34, 197, 94, 0.12);
   color: var(--accent-keep);
   font-family: var(--mono);
