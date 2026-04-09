@@ -38,11 +38,16 @@ if ! command -v node &>/dev/null; then
 fi
 ok "node $(node -v) found"
 
-if ! command -v npm &>/dev/null; then
-  error "'npm' not found. It should come with Node.js."
+if command -v pnpm &>/dev/null; then
+  PNPM_CMD=(pnpm)
+  ok "pnpm $(pnpm -v) found"
+elif command -v corepack &>/dev/null; then
+  PNPM_CMD=(corepack pnpm)
+  ok "corepack found (will use pnpm via corepack)"
+else
+  error "'pnpm' not found. Install pnpm or enable corepack."
   exit 1
 fi
-ok "npm $(npm -v) found"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ ! -f "$SCRIPT_DIR/package.json" ]]; then
@@ -87,7 +92,7 @@ if gcloud projects describe "$PROJECT_ID" &>/dev/null; then
   ok "Project '$PROJECT_ID' already exists"
 else
   info "Creating project '$PROJECT_ID'..."
-  if gcloud projects create "$PROJECT_ID" --name="dedrive-web"; then
+  if gcloud projects create "$PROJECT_ID" --name="dedrive"; then
     ok "Project created"
   else
     error "Failed to create project. Check your permissions or billing account."
@@ -130,7 +135,7 @@ warn "MANUAL STEP REQUIRED — Configure the OAuth consent screen:"
 echo ""
 echo "  1. Open: https://console.cloud.google.com/apis/credentials/consent?project=$PROJECT_ID"
 echo "  2. Set User Type to 'External' (if prompted)"
-echo "  3. Fill in the required fields (App name: dedrive-web, support email)"
+echo "  3. Fill in the required fields (App name: dedrive, support email)"
 echo "  4. On the Scopes page, add:"
 echo "       - https://www.googleapis.com/auth/drive.readonly"
 echo "       - https://www.googleapis.com/auth/drive"
@@ -160,7 +165,7 @@ echo ""
 echo "  1. Open: https://console.cloud.google.com/apis/credentials?project=$PROJECT_ID"
 echo "  2. Click '+ CREATE CREDENTIALS' → 'OAuth client ID'"
 echo "  3. Application type: 'Web application'"
-echo "  4. Name: dedrive-web"
+echo "  4. Name: dedrive"
 echo "  5. Authorized JavaScript origins:"
 echo "       - http://localhost:3000"
 if [[ -n "$PROD_DOMAIN" ]]; then
@@ -218,9 +223,22 @@ else
   ok "Created .env.local with $KEY"
 fi
 
+SITE_KEY="NEXT_PUBLIC_SITE_URL"
+if [[ -n "$PROD_DOMAIN" ]]; then
+  SITE_URL="https://${PROD_DOMAIN}"
+  if grep -q "^${SITE_KEY}=" "$ENV_FILE" 2>/dev/null; then
+    grep -v "^${SITE_KEY}=" "$ENV_FILE" > "$ENV_FILE.tmp"
+    mv "$ENV_FILE.tmp" "$ENV_FILE"
+  fi
+  echo "${SITE_KEY}=${SITE_URL}" >> "$ENV_FILE"
+  ok "Set ${SITE_KEY} in .env.local"
+else
+  info "${SITE_KEY} not written because no production domain was provided."
+fi
+
 echo ""
 info "Installing dependencies..."
-npm install
+"${PNPM_CMD[@]}" install
 ok "Dependencies installed"
 
 echo ""
@@ -232,7 +250,7 @@ echo "  Client ID: $CLIENT_ID"
 echo "  Origins:   $ORIGINS"
 echo ""
 echo "  Start the dev server:"
-echo "    npm run dev"
+echo "    pnpm dev"
 echo ""
 echo "  Then open http://localhost:3000"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

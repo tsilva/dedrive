@@ -1,45 +1,41 @@
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import Script from 'next/script';
+import {
+  absoluteUrl,
+  siteAssets,
+  siteClassification,
+  siteDescription,
+  siteKeywords,
+  siteName,
+  siteTitle,
+  siteUrl,
+  socialDescription,
+} from '@/lib/site';
 
-const SITE_URL = 'https://dedrive.tsilva.eu';
-const SITE_NAME = 'dedrive';
-const SITE_TITLE = 'dedrive | Find and Remove Duplicate Files in Google Drive';
-const SITE_DESCRIPTION = 'Scan Google Drive for true duplicate files, review matches side by side, and move extras into a safe _dupes folder. Private, browser-based, and free.';
-const SOCIAL_DESCRIPTION = 'Clean up duplicate Google Drive files with a private browser-based tool. Preview matches, keep the right copy, and safely move extras.';
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 const GOOGLE_SITE_VERIFICATION = process.env.GOOGLE_SITE_VERIFICATION;
 const BING_SITE_VERIFICATION = process.env.BING_SITE_VERIFICATION;
 const YANDEX_SITE_VERIFICATION = process.env.YANDEX_SITE_VERIFICATION;
+const SHOULD_LOAD_VERCEL_SCRIPTS = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ENV);
 
 export const metadata = {
   title: {
-    absolute: SITE_TITLE,
+    absolute: siteTitle,
   },
-  description: SITE_DESCRIPTION,
+  description: siteDescription,
   alternates: {
     canonical: '/',
   },
   category: 'productivity',
-  classification: 'File management and storage optimization',
-  keywords: [
-    'google drive duplicate finder',
-    'remove duplicate files google drive',
-    'google drive cleanup',
-    'duplicate file manager',
-    'storage cleanup tool',
-    'browser based file organizer',
-    'private google drive tools',
-    'duplicate file scanner',
-    'free duplicate file finder',
-    'google drive storage saver',
-  ],
+  classification: siteClassification,
+  keywords: siteKeywords,
   authors: [{ name: 'Tiago Silva' }],
   creator: 'Tiago Silva',
   publisher: 'Tiago Silva',
   appleWebApp: {
     capable: true,
-    title: SITE_NAME,
+    title: siteName,
     statusBarStyle: 'black-translucent',
   },
   verification: {
@@ -52,27 +48,27 @@ export const metadata = {
       : undefined,
   },
   openGraph: {
-    title: SITE_TITLE,
-    description: SOCIAL_DESCRIPTION,
+    title: siteTitle,
+    description: socialDescription,
     type: 'website',
-    url: SITE_URL,
-    siteName: SITE_NAME,
+    url: siteUrl,
+    siteName: siteName,
     locale: 'en_US',
     images: [
       {
-        url: '/opengraph-image',
+        url: siteAssets.openGraphImage,
         width: 1200,
         height: 630,
-        alt: 'dedrive preview card showing Google Drive duplicate cleanup',
+        alt: 'dedrive social card for a private Google Drive duplicate finder',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: SITE_TITLE,
-    description: SOCIAL_DESCRIPTION,
+    title: siteTitle,
+    description: socialDescription,
     creator: '@tiagosilva',
-    images: ['/opengraph-image'],
+    images: [siteAssets.openGraphImage],
   },
   robots: {
     index: true,
@@ -93,9 +89,9 @@ const jsonLd = {
   '@graph': [
     {
       '@type': 'WebSite',
-      name: SITE_NAME,
-      url: SITE_URL,
-      description: SITE_DESCRIPTION,
+      name: siteName,
+      url: siteUrl,
+      description: siteDescription,
       publisher: {
         '@type': 'Person',
         name: 'Tiago Silva',
@@ -104,21 +100,21 @@ const jsonLd = {
     },
     {
       '@type': 'SoftwareApplication',
-      name: SITE_NAME,
-      url: SITE_URL,
-      image: `${SITE_URL}/opengraph-image`,
-      screenshot: `${SITE_URL}/opengraph-image`,
-      description: SITE_DESCRIPTION,
+      name: siteName,
+      url: siteUrl,
+      image: absoluteUrl(siteAssets.openGraphImage),
+      screenshot: absoluteUrl(siteAssets.openGraphImage),
+      description: siteDescription,
       applicationCategory: 'UtilityApplication',
       applicationSubCategory: 'FileManagementApplication',
       operatingSystem: 'Any',
       browserRequirements: 'Requires JavaScript and a Google account.',
       isAccessibleForFree: true,
       featureList: [
-        'Find Google Drive duplicates by MD5 checksum',
-        'Preview image, PDF, and text files before deciding',
-        'Keep one copy and move extras into a _dupes folder',
-        'Request write access only when moving files',
+        'Find duplicate files in Google Drive by checksum',
+        'Scan with read-only access before any write permission is requested',
+        'Preview image, PDF, and text matches before choosing what to keep',
+        'Move extra copies into a _dupes folder instead of deleting them',
       ],
       offers: {
         '@type': 'Offer',
@@ -159,8 +155,12 @@ export default function MarketingLayout({ children }) {
         </>
       )}
       {children}
-      <Analytics />
-      <SpeedInsights />
+      {SHOULD_LOAD_VERCEL_SCRIPTS && (
+        <>
+          <Analytics />
+          <SpeedInsights />
+        </>
+      )}
     </>
   );
 }

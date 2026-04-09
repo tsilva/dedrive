@@ -1,14 +1,12 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Script from 'next/script';
 import Header from './Header';
 import Footer from './Footer';
 import AccountScreen from './screens/AccountScreen';
-import ScanScreen from './screens/ScanScreen';
-import ReviewScreen from './screens/ReviewScreen';
-import ExecuteScreen from './screens/ExecuteScreen';
 import { useDecisions } from '@/hooks/useDecisions';
 import { useScanResults } from '@/hooks/useScanResults';
 import {
@@ -25,6 +23,9 @@ import { clearPreviewCache } from '@/lib/preview';
 import { trackEvent, trackException } from '@/lib/analytics';
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+const ScanScreen = dynamic(() => import('./screens/ScanScreen'));
+const ReviewScreen = dynamic(() => import('./screens/ReviewScreen'));
+const ExecuteScreen = dynamic(() => import('./screens/ExecuteScreen'));
 
 export default function App() {
   const pathname = usePathname();
@@ -192,7 +193,7 @@ export default function App() {
         strategy="afterInteractive"
       />
       <Header screen={screen} user={user} />
-      <div className="main">
+      <main className="main">
         {screen === 'account' && (
           <AccountScreen
             error={authError}
@@ -227,7 +228,7 @@ export default function App() {
             onRequestWriteAccess={handleRequestWriteAccess}
           />
         )}
-      </div>
+      </main>
       <Footer />
     </div>
   );

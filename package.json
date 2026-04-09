@@ -1,24 +1,26 @@
 {
-  "name": "dedrive-web",
+  "name": "dedrive",
   "version": "1.0.0",
-  "description": "",
+  "description": "Private Google Drive duplicate finder with read-only scanning and safe cleanup into a _dupes folder.",
+  "packageManager": "pnpm@10.27.0",
   "main": "index.js",
   "scripts": {
+    "preinstall": "node -e \"const ua = process.env.npm_config_user_agent || ''; if (!ua.startsWith('pnpm/')) { console.error('Use pnpm for this repo.'); process.exit(1); }\"",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tsilva/dedrive-web.git"
+    "url": "git+https://github.com/tsilva/dedrive.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/tsilva/dedrive-web/issues"
+    "url": "https://github.com/tsilva/dedrive/issues"
   },
-  "homepage": "https://github.com/tsilva/dedrive-web#readme",
+  "homepage": "https://github.com/tsilva/dedrive#readme",
   "dependencies": {
     "@vercel/analytics": "^1.6.1",
     "@vercel/speed-insights": "^1.3.1",

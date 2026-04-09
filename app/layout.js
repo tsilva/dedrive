@@ -1,21 +1,27 @@
 import './globals.css';
-
-const SITE_URL = "https://dedrive.tsilva.eu";
+import {
+  defaultTitle,
+  siteAssets,
+  siteName,
+  siteUrl,
+  titleTemplate,
+} from '@/lib/site';
 
 export const metadata = {
   title: {
-    default: 'dedrive',
-    template: '%s | dedrive',
+    default: defaultTitle,
+    template: titleTemplate,
   },
-  applicationName: 'dedrive',
-  metadataBase: new URL(SITE_URL),
+  applicationName: siteName,
+  metadataBase: new URL(siteUrl),
   icons: {
     icon: [
-      { url: '/icon', type: 'image/png', sizes: '32x32' },
-      { url: '/icon', type: 'image/png', sizes: '192x192' },
+      { url: siteAssets.faviconIco, type: 'image/x-icon', sizes: 'any' },
+      { url: siteAssets.faviconPng, type: 'image/png', sizes: '32x32' },
+      { url: siteAssets.androidChrome192, type: 'image/png', sizes: '192x192' },
     ],
-    apple: [{ url: '/apple-icon', type: 'image/png', sizes: '180x180' }],
-    shortcut: ['/icon'],
+    apple: [{ url: siteAssets.appleTouchIcon, type: 'image/png', sizes: '180x180' }],
+    shortcut: [siteAssets.faviconIco],
   },
   manifest: '/manifest.webmanifest',
   formatDetection: {

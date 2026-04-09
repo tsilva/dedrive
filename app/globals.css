@@ -30,6 +30,18 @@ a:hover { text-decoration: underline; }
 
 code, .mono { font-family: var(--mono); font-size: 0.85em; }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Layout */
 .app {
   display: flex;
@@ -82,7 +94,11 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
 .nav-item-completed { color: var(--accent-keep); }
 .nav-item-completed:hover { color: var(--accent-keep); background: var(--surface-2); }
 
-.nav-item-disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+.nav-item-disabled {
+  color: var(--text-dim);
+  cursor: default;
+  pointer-events: none;
+}
 
 .user-info {
   display: flex;

@@ -1,3 +1,0 @@
-User-agent: *
-Allow: /
-Sitemap: https://dedrive.tsilva.eu/sitemap.xml
