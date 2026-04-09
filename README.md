@@ -1,12 +1,12 @@
 <div align="center">
-  <img src="logo.png" alt="dedrive-web" width="512"/>
+  <img src="logo.png" alt="dedrive" width="512"/>
 
   [![Live Demo](https://img.shields.io/badge/Live-dedrive.tsilva.eu-green?style=flat-square&logo=vercel)](https://dedrive.tsilva.eu)
   [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js)](https://nextjs.org/)
   [![License](https://img.shields.io/badge/License-ISC-blue?style=flat-square)](LICENSE)
   [![JavaScript](https://img.shields.io/badge/JavaScript-ES2022-F7DF1E?style=flat-square&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 
-  **🔍 Find and clean up duplicate files in your Google Drive with read-only access first 🧹**
+  **🔍 Find duplicate files in Google Drive with a private, read-only-first cleanup flow 🧹**
 
   [Getting Started](#-getting-started) · [How It Works](#-how-it-works) · [Setup](#%EF%B8%8F-setup)
 </div>
@@ -17,7 +17,7 @@
 
 Google Drive doesn't tell you about duplicate files. Over time, copies pile up — downloaded twice, synced from multiple devices, shared across folders. You're paying for storage you don't need, and there's no built-in way to find or fix it.
 
-**dedrive-web scans your Drive in the browser, groups files by MD5 checksum, and only asks for write access if you choose to move duplicates into `_dupes/`.**
+**dedrive scans your Drive in the browser, groups files by MD5 checksum, and only asks for write access if you choose to move duplicates into `_dupes/`.**
 
 ## ✨ Features
 
@@ -45,10 +45,10 @@ Google Drive doesn't tell you about duplicate files. Over time, copies pile up �
 ### Quick Start
 
 ```bash
-git clone https://github.com/tsilva/dedrive-web.git
-cd dedrive-web
+git clone https://github.com/tsilva/dedrive.git
+cd dedrive
 ./setup.sh     # interactive: creates GCP project, enables Drive API, configures OAuth
-npm run dev    # open http://localhost:3000, then use /app for the secure workflow
+pnpm dev       # open http://localhost:3000, then use /app for the secure workflow
 ```
 
 The setup script walks you through creating a GCP project, enabling the Drive API, configuring the OAuth consent screen, and generating a Client ID. It writes the credentials to `.env.local` automatically.
@@ -68,6 +68,7 @@ If you prefer to configure things yourself:
 
 ```
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+NEXT_PUBLIC_SITE_URL=https://dedrive.tsilva.eu
 NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 GOOGLE_SITE_VERIFICATION=your-google-token
 BING_SITE_VERIFICATION=your-bing-token
@@ -77,8 +78,8 @@ YANDEX_SITE_VERIFICATION=your-yandex-token
 5. Install and run:
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ## 🔄 How It Works
@@ -98,9 +99,10 @@ Files are grouped by MD5 checksum. Groups with mismatched file sizes are flagged
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start dev server on `http://localhost:3000` |
-| `npm run build` | Production build |
-| `npm run start` | Serve production build |
+| `pnpm dev` | Start dev server on `http://localhost:3000` |
+| `pnpm build` | Production build |
+| `pnpm start` | Serve production build |
+| `./scripts/run_lighthouse.sh <url> <mobile\|desktop>` | Run a repeatable Lighthouse audit and print category scores |
 | `./setup.sh` | Interactive GCP + OAuth setup |
 
 ## 🏗️ Architecture
@@ -111,9 +113,8 @@ app/
   (marketing)/         # Public landing page with analytics and SEO metadata
   (secure)/app/        # Secure Drive workflow at /app (noindex, no analytics)
   manifest.js          # Web app manifest
-  icon.js              # Generated app icon
-  apple-icon.js        # Generated Apple touch icon
-  opengraph-image.js   # Generated social preview image
+  robots.js            # Dynamic robots.txt generated from the canonical site URL
+  sitemap.js           # Dynamic sitemap.xml generated from the canonical site URL
   globals.css          # All styles
 
 components/
@@ -134,8 +135,16 @@ lib/
   drive.js             # Drive API v3 client with retry + pagination
   dedup.js             # MD5 grouping, path resolution, stats
   preview.js           # Lazy file preview with in-memory cache
+  site.js              # Shared site metadata, asset paths, and canonical origin
   state.js             # localStorage-backed non-sensitive settings
   utils.js             # formatSize, formatDate, debounce, pooledMap
+
+public/
+  brand/               # Generated canonical logo, icon, favicon, and OG assets
+
+scripts/
+  run_lighthouse.sh    # Repeatable Lighthouse helper for mobile and desktop audits
+  openrouter-preflight.sh # Authenticated OpenRouter check before asset generation
 ```
 
 ## 📄 License
@@ -146,6 +155,6 @@ lib/
 
 <div align="center">
 
-⭐ **Found this useful? [Give it a star](https://github.com/tsilva/dedrive-web)** ⭐
+⭐ **Found this useful? [Give it a star](https://github.com/tsilva/dedrive)** ⭐
 
 </div>

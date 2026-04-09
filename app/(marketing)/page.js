@@ -1,21 +1,15 @@
-import Header from '@/components/Header';
-import AccountScreen from '@/components/screens/AccountScreen';
-import Footer from '@/components/Footer';
+import MarketingFooter from '@/components/MarketingFooter';
+import MarketingHeader from '@/components/MarketingHeader';
+import MarketingHero from '@/components/MarketingHero';
 
 export default function MarketingPage() {
   return (
     <div className="app">
-      <Header screen="account" user={null} />
-      <div className="main">
-        <AccountScreen
-          signInHref="/app?start=signin"
-          signInHelper="You will be redirected to the secure app page, where you can sign in with Google."
-          signInLabel="Start"
-          signInVariant="cta"
-          user={null}
-        />
-      </div>
-      <Footer />
+      <MarketingHeader />
+      <main className="main">
+        <MarketingHero />
+      </main>
+      <MarketingFooter />
     </div>
   );
 }

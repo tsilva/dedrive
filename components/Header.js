@@ -1,11 +1,6 @@
 'use client';
 
-const SCREENS = [
-  { id: 'account', label: 'Account' },
-  { id: 'scan', label: 'Scan' },
-  { id: 'review', label: 'Review' },
-  { id: 'execute', label: 'Execute' },
-];
+import { SCREEN_STEPS } from './screen-steps';
 
 export default function Header({ screen, user }) {
   const getScreenStatus = (id) => {
@@ -20,8 +15,8 @@ export default function Header({ screen, user }) {
   return (
     <header className="header">
       <div className="logo">dedrive</div>
-      <nav className="nav">
-        {SCREENS.map((s) => {
+      <nav className="nav" aria-label="Workflow steps">
+        {SCREEN_STEPS.map((s) => {
           const status = getScreenStatus(s.id);
           return (
             <div
@@ -43,7 +38,7 @@ export default function Header({ screen, user }) {
           </div>
         ) : (
           <a
-            href="https://github.com/tsilva/dedrive-web"
+            href="https://github.com/tsilva/dedrive"
             target="_blank"
             rel="noopener noreferrer"
             className="github-link"

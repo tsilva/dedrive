@@ -1,6 +1,8 @@
+import { secureAppDescription } from '@/lib/site';
+
 export const metadata = {
-  title: 'Secure App',
-  description: 'Secure Google Drive duplicate review workspace.',
+  title: 'dedrive App',
+  description: secureAppDescription,
   robots: {
     index: false,
     follow: false,

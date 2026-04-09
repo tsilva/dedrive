@@ -4,24 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-- `npm run dev` — start Next.js dev server on http://localhost:3000
-- `npm run build` — production build
-- `npm run start` — serve production build
+- `pnpm dev` — start Next.js dev server on http://localhost:3000
+- `pnpm build` — production build
+- `pnpm start` — serve production build
 - `./setup.sh` — interactive setup: creates GCP project, enables Drive API, configures OAuth, writes `.env.local`
 
 No test runner or linter is configured.
 
 ## Environment
 
-Requires `.env.local` with `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (Google OAuth client ID). Created by `setup.sh`.
+Requires `.env.local` with `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (Google OAuth client ID). `NEXT_PUBLIC_SITE_URL` is optional and defaults to `https://dedrive.tsilva.eu` for metadata/canonical generation. `.env.local` is created by `setup.sh`.
 
 ## Architecture
 
-Next.js 16 app (App Router, JavaScript, no TypeScript) that finds and manages duplicate files in Google Drive. Runs entirely client-side — no backend/API routes. The single page (`app/page.js`) dynamically imports `components/App.js` with SSR disabled.
+Next.js 16 app (App Router, JavaScript, no TypeScript) that finds and manages duplicate files in Google Drive. It uses a public marketing route at `/` plus a secure client-rendered workflow at `/app`, with no backend/API routes.
 
 ### Screen flow
 
-`App.js` manages a `screen` state that cycles through four screens in `components/screens/`:
+`components/App.js` manages a `screen` state that cycles through four screens in `components/screens/`:
 
 1. **AccountScreen** — Google sign-in, start scan
 2. **ScanScreen** — progress while fetching all Drive files
