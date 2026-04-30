@@ -51,3 +51,4 @@ logs/
 .claude/settings.local.json
 .next/
 out/
+.lighthouse/
