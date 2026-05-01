@@ -1,20 +1,23 @@
 {
-  "name": "dedrive | Secure Google Drive Duplicate Finder & Cleaner",
-  "short_name": "dedrive | Secure Google Drive Duplicate Finder & Cleaner",
+  "name": "dedrive",
+  "short_name": "dedrive",
   "description": "A private, client-side web app to identify and move duplicate files in Google Drive using MD5 checksums. Reclaim storage space without your data leaving the browser.",
+  "start_url": "/",
   "icons": [
     {
       "src": "android-chrome-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "android-chrome-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "theme_color": "#0d0d0d",
+  "background_color": "#0d0d0d",
   "display": "standalone"
 }
