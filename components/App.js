@@ -12,14 +12,16 @@ import { useScanResults } from '@/hooks/useScanResults';
 import {
   hasWriteAccess,
   initAuth,
+  releaseWriteAccess,
   requestReadAccess,
   requestWriteAccess,
   setAuthCallback,
   signOut,
 } from '@/lib/auth';
 import { clearFolderCache, getUserInfo, fetchAllFiles } from '@/lib/drive';
-import { findDuplicates, resolvePaths, computeStats } from '@/lib/dedup';
+import { excludeDedupeFolderFiles, findDuplicates, resolvePaths, computeStats } from '@/lib/dedup';
 import { clearPreviewCache } from '@/lib/preview';
+import { getSettings } from '@/lib/state';
 import { trackEvent, trackException } from '@/lib/analytics';
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
@@ -130,12 +132,13 @@ export default function App() {
         setScanProgress({ page, fileCount });
       });
 
-      resolvePaths(allFiles);
-      const groups = findDuplicates(allFiles);
+      const settings = getSettings();
+      const scannedFiles = excludeDedupeFolderFiles(resolvePaths(allFiles), settings.dupesFolder);
+      const groups = findDuplicates(scannedFiles);
       const scanStats = computeStats(groups);
-      save(allFiles, groups);
+      save(scannedFiles, groups);
       trackEvent('scan_completed', {
-        file_count: allFiles.length,
+        file_count: scannedFiles.length,
         duplicate_group_count: scanStats.totalGroups,
         duplicate_file_count: scanStats.totalFiles,
         uncertain_group_count: scanStats.uncertainCount,
@@ -174,6 +177,15 @@ export default function App() {
   const handleRequestWriteAccess = useCallback(async () => {
     await requestWriteAccess();
     setCanWrite(hasWriteAccess());
+  }, []);
+
+  const handleReleaseWriteAccess = useCallback(() => {
+    const released = releaseWriteAccess();
+    if (!released) return;
+
+    setCanWrite(false);
+    setUser(null);
+    setAuthNotice('Write access was cleared. Sign in again to run another scan.');
   }, []);
 
   useEffect(() => {
@@ -226,6 +238,7 @@ export default function App() {
             decisions={decisions}
             dupGroups={dupGroups}
             onRequestWriteAccess={handleRequestWriteAccess}
+            onReleaseWriteAccess={handleReleaseWriteAccess}
           />
         )}
       </main>

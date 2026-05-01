@@ -3,26 +3,36 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatSize } from '@/lib/utils';
 import { getSettings } from '@/lib/state';
-import { moveFile, ensureFolderPath } from '@/lib/drive';
+import { moveFile, ensureDedupeRootFolder, ensureFolderPath } from '@/lib/drive';
+import { isInDedupeFolder } from '@/lib/dedup';
 import { pooledMap } from '@/lib/utils';
 import { trackEvent, trackException } from '@/lib/analytics';
 
-export default function ExecuteScreen({ canWrite, decisions, dupGroups, onRequestWriteAccess }) {
+export default function ExecuteScreen({
+  canWrite,
+  decisions,
+  dupGroups,
+  onRequestWriteAccess,
+  onReleaseWriteAccess,
+}) {
   const [confirmed, setConfirmed] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [grantingWriteAccess, setGrantingWriteAccess] = useState(false);
   const [grantError, setGrantError] = useState(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState(null);
+  const [writeAccessReleased, setWriteAccessReleased] = useState(false);
   const completedRef = useRef(0);
+  const executingRef = useRef(false);
 
   const moves = useMemo(() => {
+    const settings = getSettings();
     const list = [];
     for (const g of dupGroups) {
       const d = decisions[g.md5];
       if (!d || d.action !== 'keep') continue;
       for (const f of g.files) {
-        if (f.id !== d.keep) {
+        if (f.id !== d.keep && !isInDedupeFolder(f, settings.dupesFolder)) {
           list.push(f);
         }
       }
@@ -52,49 +62,66 @@ export default function ExecuteScreen({ canWrite, decisions, dupGroups, onReques
   }
 
   async function handleExecute() {
+    if (executingRef.current) return;
     if (moves.length === 0 || !confirmed || !canWrite) return;
 
+    executingRef.current = true;
     trackEvent('execute_started', {
       move_count: moves.length,
     });
     setExecuting(true);
     setResults(null);
+    setWriteAccessReleased(false);
     completedRef.current = 0;
     setProgress({ current: 0, total: moves.length });
 
     const settings = getSettings();
+    try {
+      const dupesRootId = await ensureDedupeRootFolder(settings.dupesFolder);
+      const moveResults = await pooledMap(
+        moves,
+        async (file) => {
+          try {
+            if (isInDedupeFolder(file, settings.dupesFolder)) {
+              completedRef.current++;
+              setProgress({ current: completedRef.current, total: moves.length });
+              return { ok: true, name: file.name, skipped: true };
+            }
 
-    const moveResults = await pooledMap(
-      moves,
-      async (file) => {
-        try {
-          const pathParts = (file.path || '/' + file.name).split('/').filter(Boolean);
-          pathParts.pop();
-          const destParts = [settings.dupesFolder, ...pathParts];
-          const destFolderId = await ensureFolderPath(destParts);
-          await moveFile(file.id, file.parents || [], destFolderId);
-          completedRef.current++;
-          setProgress({ current: completedRef.current, total: moves.length });
-          return { ok: true, name: file.name };
-        } catch (e) {
-          completedRef.current++;
-          setProgress({ current: completedRef.current, total: moves.length });
-          return { ok: false, name: file.name, error: e.message };
-        }
-      },
-      settings.batchSize
-    );
+            const pathParts = (file.path || '/' + file.name).split('/').filter(Boolean);
+            pathParts.pop();
+            const destFolderId = await ensureFolderPath(pathParts, dupesRootId);
+            await moveFile(file.id, file.parents || [], destFolderId);
+            completedRef.current++;
+            setProgress({ current: completedRef.current, total: moves.length });
+            return { ok: true, name: file.name };
+          } catch (e) {
+            completedRef.current++;
+            setProgress({ current: completedRef.current, total: moves.length });
+            return { ok: false, name: file.name, error: e.message };
+          }
+        },
+        settings.batchSize
+      );
 
-    setResults(moveResults);
-    setExecuting(false);
-    const failedCount = moveResults.filter((result) => !result.ok).length;
-    trackEvent('execute_completed', {
-      move_count: moves.length,
-      success_count: moveResults.length - failedCount,
-      failure_count: failedCount,
-    });
-    if (failedCount > 0) {
-      trackException('execute_partial_failure');
+      setResults(moveResults);
+      const failedCount = moveResults.filter((result) => !result.ok).length;
+      trackEvent('execute_completed', {
+        move_count: moves.length,
+        success_count: moveResults.length - failedCount,
+        failure_count: failedCount,
+      });
+      if (failedCount > 0) {
+        trackException('execute_partial_failure');
+      }
+      onReleaseWriteAccess?.();
+      setWriteAccessReleased(true);
+    } catch (error) {
+      setResults([{ ok: false, name: 'Move setup', error: error.message || 'Move setup failed.' }]);
+      trackException('execute_failed', true);
+    } finally {
+      setExecuting(false);
+      executingRef.current = false;
     }
   }
 
@@ -195,6 +222,11 @@ export default function ExecuteScreen({ canWrite, decisions, dupGroups, onReques
           <div className="execute-summary">
             {failed.length === 0 ? 'Move complete.' : `Move complete with ${failed.length} failure${failed.length === 1 ? '' : 's'}.`}
           </div>
+          {writeAccessReleased && (
+            <div className="permission-panel-copy">
+              Write access has been cleared for this session.
+            </div>
+          )}
           {failed.length > 0 && (
             <div className="execute-errors">
               <div className="error-header">{failed.length} failed:</div>

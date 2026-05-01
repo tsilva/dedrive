@@ -41,11 +41,12 @@ pnpm start    # serve the production build
 
 - Requires Node.js, pnpm, a Google Cloud project, and an OAuth web client with the Google Drive API enabled.
 - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is required. `NEXT_PUBLIC_SITE_URL` is optional and defaults to `https://dedrive.tsilva.eu`.
-- Optional marketing-route metadata integrations use `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `GOOGLE_SITE_VERIFICATION`, `BING_SITE_VERIFICATION`, and `YANDEX_SITE_VERIFICATION`.
-- The privileged workflow is client-rendered at `/app`; there are no backend API routes.
+- Optional marketing-route metadata integrations use `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `GOOGLE_SITE_VERIFICATION`, `BING_SITE_VERIFICATION`, and `YANDEX_SITE_VERIFICATION`; analytics are disabled inside `/app`.
+- The privileged workflow runs at `/app`; there are no backend API routes, and the route uses a nonce-based Content Security Policy for scripts.
+- Write access is requested only for execution and is revoked after the move flow finishes.
 - Scan results and keep decisions stay in the active browser tab. Non-sensitive settings use `localStorage`.
 - Google Workspace native files are skipped because they do not expose `md5Checksum`.
-- Duplicates are moved into `_dupes`; dedrive does not permanently delete files.
+- Duplicates are moved into `_dupes`; dedrive ignores files already there on future scans and does not permanently delete files.
 
 ## Architecture
 

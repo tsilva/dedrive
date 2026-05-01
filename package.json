@@ -10,6 +10,11 @@
     "build": "next build",
     "start": "next start"
   },
+  "pnpm": {
+    "overrides": {
+      "postcss": "8.5.10"
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tsilva/dedrive.git"

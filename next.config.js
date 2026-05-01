@@ -1,26 +1,6 @@
 /** @type {import('next').NextConfig} */
 const { execSync } = require('child_process');
 
-function buildCsp(parts) {
-  return parts.join(' ').replace(/\s{2,}/g, ' ').trim();
-}
-
-const secureAppCsp = buildCsp([
-  "default-src 'self';",
-  "base-uri 'self';",
-  "object-src 'none';",
-  "frame-ancestors 'none';",
-  "form-action 'self' https://accounts.google.com;",
-  "script-src 'self' 'unsafe-inline' https://accounts.google.com https://accounts.gstatic.com;",
-  "style-src 'self' 'unsafe-inline';",
-  "img-src 'self' blob: data: https://*.googleusercontent.com https://*.gstatic.com https://*.google.com;",
-  "font-src 'self' data:;",
-  "connect-src 'self' https://www.googleapis.com https://accounts.google.com https://oauth2.googleapis.com;",
-  "frame-src https://accounts.google.com;",
-  "worker-src 'self' blob:;",
-  'upgrade-insecure-requests;',
-]);
-
 const defaultSecurityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
@@ -53,18 +33,6 @@ const nextConfig = {
   },
   async headers() {
     return [
-      {
-        source: '/app',
-        headers: [
-          { key: 'Content-Security-Policy', value: secureAppCsp },
-        ],
-      },
-      {
-        source: '/app/:path*',
-        headers: [
-          { key: 'Content-Security-Policy', value: secureAppCsp },
-        ],
-      },
       {
         source: '/brand/:path*',
         headers: [

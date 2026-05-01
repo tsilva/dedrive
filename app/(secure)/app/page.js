@@ -1,9 +1,8 @@
-'use client';
+import { connection } from 'next/server';
 
-import dynamic from 'next/dynamic';
+import App from '@/components/App';
 
-const App = dynamic(() => import('@/components/App'), { ssr: false });
-
-export default function SecureAppPage() {
+export default async function SecureAppPage() {
+  await connection();
   return <App />;
 }
