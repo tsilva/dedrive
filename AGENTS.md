@@ -11,6 +11,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 No test runner or linter is configured.
 
+## Command conventions
+
+- When the user says only `push`, interpret it as: stage the relevant current changes, create an appropriate git commit, integrate upstream changes if the remote branch has advanced, then push.
+
 ## Environment
 
 Requires `.env.local` with `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (Google OAuth client ID). `NEXT_PUBLIC_SITE_URL` is optional and defaults to `https://dedrive.tsilva.eu` for metadata/canonical generation. `.env.local` is created by `setup.sh`.
