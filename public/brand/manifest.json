@@ -6,8 +6,8 @@
     "web-seo"
   ],
   "sources": [
-    "built_in_defaults",
-    "cli_args"
+    "codex_native_image_generation",
+    "derive_assets.py"
   ],
   "metadata": {
     "title": "dedrive | Secure Google Drive Duplicate Finder & Cleaner",
@@ -32,7 +32,7 @@
       "key": "logo",
       "kind": "logo",
       "target": "shared",
-      "strategy": "generated",
+      "strategy": "generated_from_logo_source",
       "path": "logo/logo-1024.png",
       "size": [
         1024,
@@ -43,8 +43,19 @@
       "key": "icon",
       "kind": "icon",
       "target": "shared",
-      "strategy": "generated_from_logo_reference",
+      "strategy": "generated_from_icon_source",
       "path": "icon/icon-1024.png",
+      "size": [
+        1024,
+        1024
+      ]
+    },
+    {
+      "key": "root-logo",
+      "kind": "logo",
+      "target": "repository",
+      "strategy": "synced_from_logo",
+      "path": "../../logo.png",
       "size": [
         1024,
         1024
@@ -127,7 +138,7 @@
       "key": "web-seo-og-image",
       "kind": "social-card",
       "target": "web-seo",
-      "strategy": "generated_from_logo_reference",
+      "strategy": "generated_from_social_source",
       "path": "web-seo/og-image-1200x630.png",
       "size": [
         1200,
@@ -140,20 +151,6 @@
       "target": "web-seo",
       "strategy": "written_metadata",
       "path": "web-seo/site.webmanifest"
-    },
-    {
-      "key": "web-seo-nextjs-metadata-json",
-      "kind": "metadata",
-      "target": "web-seo",
-      "strategy": "written_metadata",
-      "path": "web-seo-metadata.json"
-    },
-    {
-      "key": "web-seo-nextjs-metadata-ts",
-      "kind": "metadata",
-      "target": "web-seo",
-      "strategy": "written_metadata",
-      "path": "web-seo-metadata.ts"
     }
   ]
 }
