@@ -21,7 +21,7 @@ import {
 import { clearFolderCache, getUserInfo, fetchAllFiles } from '@/lib/drive';
 import { excludeDedupeFolderFiles, findDuplicates, resolvePaths, computeStats } from '@/lib/dedup';
 import { clearPreviewCache } from '@/lib/preview';
-import { getSettings } from '@/lib/state';
+import { getSettings, purgeAppBrowserData } from '@/lib/state';
 import { trackEvent, trackException } from '@/lib/analytics';
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
@@ -188,6 +188,16 @@ export default function App() {
     setAuthNotice('Write access was cleared. Sign in again to run another scan.');
   }, []);
 
+  const handlePurgeAuthData = useCallback(async () => {
+    signOut();
+    clearWorkflowState();
+    await purgeAppBrowserData();
+    setUser(null);
+    setCanWrite(false);
+    setAuthNotice('App auth data was purged from this browser.');
+    setAuthError(null);
+  }, [clearWorkflowState]);
+
   useEffect(() => {
     if (searchParams.get('start') !== 'signin') return;
     if (user || screen !== 'account') return;
@@ -239,6 +249,7 @@ export default function App() {
             dupGroups={dupGroups}
             onRequestWriteAccess={handleRequestWriteAccess}
             onReleaseWriteAccess={handleReleaseWriteAccess}
+            onPurgeAuthData={handlePurgeAuthData}
           />
         )}
       </main>

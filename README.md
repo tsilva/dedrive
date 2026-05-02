@@ -44,6 +44,7 @@ pnpm start    # serve the production build
 - Optional marketing-route metadata integrations use `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `GOOGLE_SITE_VERIFICATION`, `BING_SITE_VERIFICATION`, and `YANDEX_SITE_VERIFICATION`; analytics are disabled inside `/app`.
 - The privileged workflow runs at `/app`; there are no backend API routes, and the route uses a nonce-based Content Security Policy for scripts.
 - Write access is requested only for execution and is revoked after the move flow finishes.
+- After execution, the browser can purge app auth data and app-owned local browser storage.
 - Scan results and keep decisions stay in the active browser tab. Non-sensitive settings use `localStorage`.
 - Google Workspace native files are skipped because they do not expose `md5Checksum`.
 - Duplicates are moved into `_dupes`; dedrive ignores files already there on future scans and does not permanently delete files.

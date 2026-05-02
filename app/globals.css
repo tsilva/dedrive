@@ -1043,6 +1043,18 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   margin-top: 24px;
 }
 
+.execute-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.execute-actions .permission-panel-copy {
+  margin-bottom: 0;
+}
+
 .execute-errors { margin-top: 12px; }
 .error-header { font-size: 13px; color: var(--accent-danger); font-weight: 600; }
 .error-item { font-size: 12px; color: var(--text-dim); font-family: var(--mono); padding: 2px 0; }
