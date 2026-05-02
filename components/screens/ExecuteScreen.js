@@ -14,6 +14,7 @@ export default function ExecuteScreen({
   dupGroups,
   onRequestWriteAccess,
   onReleaseWriteAccess,
+  onPurgeAuthData,
 }) {
   const [confirmed, setConfirmed] = useState(false);
   const [executing, setExecuting] = useState(false);
@@ -22,6 +23,8 @@ export default function ExecuteScreen({
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState(null);
   const [writeAccessReleased, setWriteAccessReleased] = useState(false);
+  const [purgingAuthData, setPurgingAuthData] = useState(false);
+  const [authDataPurged, setAuthDataPurged] = useState(false);
   const completedRef = useRef(0);
   const executingRef = useRef(false);
 
@@ -125,7 +128,20 @@ export default function ExecuteScreen({
     }
   }
 
+  async function handlePurgeAuthData() {
+    if (!onPurgeAuthData || purgingAuthData || authDataPurged) return;
+
+    setPurgingAuthData(true);
+    try {
+      await onPurgeAuthData();
+      setAuthDataPurged(true);
+    } finally {
+      setPurgingAuthData(false);
+    }
+  }
+
   const failed = results?.filter((r) => !r.ok) ?? [];
+  const showWriteAccessPrompt = !results && !canWrite;
 
   return (
     <div className="screen">
@@ -160,7 +176,7 @@ export default function ExecuteScreen({
             Total: {formatSize(moves.reduce((s, m) => s + (parseInt(m.size) || 0), 0))}
           </div>
 
-          {!canWrite && (
+          {showWriteAccessPrompt && (
             <div className="permission-panel">
               <div className="permission-panel-title">Write access is required to move files</div>
               <div className="permission-panel-copy">
@@ -227,6 +243,20 @@ export default function ExecuteScreen({
               Write access has been cleared for this session.
             </div>
           )}
+          <div className="execute-actions">
+            <button
+              className="btn"
+              onClick={handlePurgeAuthData}
+              disabled={purgingAuthData || authDataPurged}
+            >
+              {purgingAuthData ? 'Purging...' : authDataPurged ? 'App Auth Data Purged' : 'Purge App Auth Data'}
+            </button>
+            {authDataPurged && (
+              <div className="permission-panel-copy">
+                App auth data has been purged from this browser.
+              </div>
+            )}
+          </div>
           {failed.length > 0 && (
             <div className="execute-errors">
               <div className="error-header">{failed.length} failed:</div>
