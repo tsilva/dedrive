@@ -500,6 +500,12 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   background: rgba(30, 64, 175, 0.22);
 }
 
+.account-notice-success {
+  border-color: rgba(34, 197, 94, 0.45);
+  color: #bbf7d0;
+  background: rgba(20, 83, 45, 0.25);
+}
+
 .signed-in-actions {
   display: flex;
   flex-direction: column;
@@ -1041,18 +1047,6 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   font-size: 16px;
   font-weight: 600;
   margin-top: 24px;
-}
-
-.execute-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-}
-
-.execute-actions .permission-panel-copy {
-  margin-bottom: 0;
 }
 
 .execute-errors { margin-top: 12px; }
