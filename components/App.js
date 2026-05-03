@@ -165,14 +165,18 @@ export default function App() {
 
   const handleExecute = useCallback(() => {
     const decidedGroups = dupGroups.filter((group) => decisions[group.md5]?.action === 'keep');
+    const reviewedGroups = dupGroups.filter((group) => decisions[group.md5]);
+    const skippedGroups = dupGroups.filter((group) => decisions[group.md5]?.action === 'skip');
     const moveCount = decidedGroups.reduce((count, group) => {
       const keepId = decisions[group.md5]?.keep;
       return count + group.files.filter((file) => file.id !== keepId).length;
     }, 0);
 
     trackEvent('review_completed', {
-      reviewed_group_count: decidedGroups.length,
-      remaining_group_count: dupGroups.length - decidedGroups.length,
+      reviewed_group_count: reviewedGroups.length,
+      keep_group_count: decidedGroups.length,
+      skipped_group_count: skippedGroups.length,
+      remaining_group_count: dupGroups.length - reviewedGroups.length,
       move_candidate_count: moveCount,
     });
     setScreen('execute');
