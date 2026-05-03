@@ -41,10 +41,16 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
     onDecision(group.md5, { keep: file.id, action: 'keep' });
   }, [group, onDecision]);
 
+  const handleSkipCurrent = useCallback(() => {
+    if (!group) return;
+    onDecision(group.md5, { action: 'skip' });
+  }, [group, onDecision]);
+
   useKeyboardShortcuts({
     enabled: Boolean(group),
     maxIndex: group?.files.length ?? 0,
     onSelectIndex: handleKeepByIndex,
+    onSkipCurrent: handleSkipCurrent,
   });
 
   // Prefetch previews for upcoming groups (next 2 groups)
@@ -98,13 +104,21 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
         <div className="review-nav-label">
           Group {progress + 1} of {total} ({pendingGroups.length} remaining)
         </div>
-        <button
-          className="btn"
-          onClick={() => onExecute?.()}
-          disabled={moveCount === 0}
-        >
-          Skip to Execute ({moveCount} file{moveCount === 1 ? '' : 's'} selected)
-        </button>
+        <div className="review-actions">
+          <button
+            className="btn btn-skip"
+            onClick={handleSkipCurrent}
+          >
+            Skip Current
+          </button>
+          <button
+            className="btn"
+            onClick={() => onExecute?.()}
+            disabled={moveCount === 0}
+          >
+            Go to Execute ({moveCount} file{moveCount === 1 ? '' : 's'} selected)
+          </button>
+        </div>
       </div>
 
       <div className="group-header">
@@ -113,7 +127,7 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
           {group.files.length} files • {formatSize(group.wastedSize)} wasted
         </div>
         <div className="group-hint">
-          Click a numbered badge or press 1-9 to keep that file and continue to the next group.
+          Click a numbered badge or press 1-9 to keep that file. Press S to skip this group.
         </div>
         {group.uncertain && (
           <div className="group-warning">Size mismatch - review carefully</div>

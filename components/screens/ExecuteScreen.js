@@ -130,7 +130,7 @@ export default function ExecuteScreen({
       <div className="setup-title" style={{ marginBottom: 24 }}>Execute</div>
 
       {moves.length === 0 ? (
-        <div className="empty-state">No files to move. Review duplicates first.</div>
+        <div className="empty-state">No files selected to move.</div>
       ) : (
         <>
           <div className="dry-run-header">

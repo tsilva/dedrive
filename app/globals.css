@@ -615,6 +615,14 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   flex-wrap: wrap;
 }
 
+.review-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .filter-tabs { display: flex; gap: 4px; }
 
 .filter-btn {

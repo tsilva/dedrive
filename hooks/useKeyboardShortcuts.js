@@ -34,9 +34,14 @@ function getShortcutIndex(event) {
   return null;
 }
 
-export function useKeyboardShortcuts({ enabled = true, maxIndex = 0, onSelectIndex }) {
+export function useKeyboardShortcuts({ enabled = true, maxIndex = 0, onSelectIndex, onSkipCurrent }) {
   useEffect(() => {
-    if (!enabled || maxIndex <= 0 || typeof onSelectIndex !== 'function') return undefined;
+    if (
+      !enabled
+      || (typeof onSelectIndex !== 'function' && typeof onSkipCurrent !== 'function')
+    ) {
+      return undefined;
+    }
 
     const handleKeyDown = (event) => {
       if (
@@ -52,6 +57,14 @@ export function useKeyboardShortcuts({ enabled = true, maxIndex = 0, onSelectInd
         return;
       }
 
+      if (event.key.toLowerCase() === 's' && typeof onSkipCurrent === 'function') {
+        event.preventDefault();
+        onSkipCurrent();
+        return;
+      }
+
+      if (maxIndex <= 0 || typeof onSelectIndex !== 'function') return;
+
       const shortcutIndex = getShortcutIndex(event);
       if (shortcutIndex === null || shortcutIndex >= maxIndex) return;
 
@@ -61,5 +74,5 @@ export function useKeyboardShortcuts({ enabled = true, maxIndex = 0, onSelectInd
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [enabled, maxIndex, onSelectIndex]);
+  }, [enabled, maxIndex, onSelectIndex, onSkipCurrent]);
 }
