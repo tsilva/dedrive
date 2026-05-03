@@ -13,8 +13,7 @@ export default function ExecuteScreen({
   decisions,
   dupGroups,
   onRequestWriteAccess,
-  onReleaseWriteAccess,
-  onPurgeAuthData,
+  onComplete,
 }) {
   const [confirmed, setConfirmed] = useState(false);
   const [executing, setExecuting] = useState(false);
@@ -22,9 +21,6 @@ export default function ExecuteScreen({
   const [grantError, setGrantError] = useState(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState(null);
-  const [writeAccessReleased, setWriteAccessReleased] = useState(false);
-  const [purgingAuthData, setPurgingAuthData] = useState(false);
-  const [authDataPurged, setAuthDataPurged] = useState(false);
   const completedRef = useRef(0);
   const executingRef = useRef(false);
 
@@ -74,7 +70,6 @@ export default function ExecuteScreen({
     });
     setExecuting(true);
     setResults(null);
-    setWriteAccessReleased(false);
     completedRef.current = 0;
     setProgress({ current: 0, total: moves.length });
 
@@ -117,26 +112,13 @@ export default function ExecuteScreen({
       if (failedCount > 0) {
         trackException('execute_partial_failure');
       }
-      onReleaseWriteAccess?.();
-      setWriteAccessReleased(true);
+      await onComplete?.(moveResults);
     } catch (error) {
       setResults([{ ok: false, name: 'Move setup', error: error.message || 'Move setup failed.' }]);
       trackException('execute_failed', true);
     } finally {
       setExecuting(false);
       executingRef.current = false;
-    }
-  }
-
-  async function handlePurgeAuthData() {
-    if (!onPurgeAuthData || purgingAuthData || authDataPurged) return;
-
-    setPurgingAuthData(true);
-    try {
-      await onPurgeAuthData();
-      setAuthDataPurged(true);
-    } finally {
-      setPurgingAuthData(false);
     }
   }
 
@@ -237,25 +219,6 @@ export default function ExecuteScreen({
         <div>
           <div className="execute-summary">
             {failed.length === 0 ? 'Move complete.' : `Move complete with ${failed.length} failure${failed.length === 1 ? '' : 's'}.`}
-          </div>
-          {writeAccessReleased && (
-            <div className="permission-panel-copy">
-              Write access has been cleared for this session.
-            </div>
-          )}
-          <div className="execute-actions">
-            <button
-              className="btn"
-              onClick={handlePurgeAuthData}
-              disabled={purgingAuthData || authDataPurged}
-            >
-              {purgingAuthData ? 'Purging...' : authDataPurged ? 'App Auth Data Purged' : 'Purge App Auth Data'}
-            </button>
-            {authDataPurged && (
-              <div className="permission-panel-copy">
-                App auth data has been purged from this browser.
-              </div>
-            )}
           </div>
           {failed.length > 0 && (
             <div className="execute-errors">

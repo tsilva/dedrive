@@ -5,6 +5,7 @@ import Link from 'next/link';
 export default function AccountScreen({
   error,
   notice,
+  completionNotice,
   user,
   onSignIn,
   onSignOut,
@@ -104,6 +105,7 @@ export default function AccountScreen({
           </div>
         )}
 
+        {completionNotice && <div className="account-notice account-notice-success">{completionNotice}</div>}
         {notice && <div className="account-notice account-notice-info">{notice}</div>}
         {error && <div className="account-notice account-notice-error">{error}</div>}
 

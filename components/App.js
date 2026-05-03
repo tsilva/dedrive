@@ -12,7 +12,6 @@ import { useScanResults } from '@/hooks/useScanResults';
 import {
   hasWriteAccess,
   initAuth,
-  releaseWriteAccess,
   requestReadAccess,
   requestWriteAccess,
   setAuthCallback,
@@ -37,6 +36,7 @@ export default function App() {
   const [gsiLoaded, setGsiLoaded] = useState(false);
   const [user, setUser] = useState(null);
   const [authNotice, setAuthNotice] = useState(null);
+  const [completionNotice, setCompletionNotice] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [canWrite, setCanWrite] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -64,6 +64,7 @@ export default function App() {
       setUser(null);
       setCanWrite(false);
       setAuthNotice(null);
+      setCompletionNotice(null);
       setAuthError('Your Google session expired. Sign in again.');
       setScreen('account');
     });
@@ -88,6 +89,7 @@ export default function App() {
   const handleSignIn = useCallback(async () => {
     trackEvent('sign_in_started');
     setAuthNotice(null);
+    setCompletionNotice(null);
     setAuthError(null);
 
     try {
@@ -114,6 +116,7 @@ export default function App() {
     setUser(null);
     setCanWrite(false);
     setAuthNotice(null);
+    setCompletionNotice(null);
     setAuthError(null);
     setScreen('account');
   }, [clearWorkflowState]);
@@ -122,6 +125,7 @@ export default function App() {
     trackEvent('scan_started');
     clearWorkflowState();
     setAuthNotice(null);
+    setCompletionNotice(null);
     setAuthError(null);
     setScreen('scan');
     setScanning(true);
@@ -179,23 +183,23 @@ export default function App() {
     setCanWrite(hasWriteAccess());
   }, []);
 
-  const handleReleaseWriteAccess = useCallback(() => {
-    const released = releaseWriteAccess();
-    if (!released) return;
+  const handleExecuteComplete = useCallback(async (moveResults) => {
+    const successCount = moveResults.filter((result) => result.ok && !result.skipped).length;
+    const failedCount = moveResults.filter((result) => !result.ok).length;
+    const fileLabel = successCount === 1 ? 'file' : 'files';
+    const failureCopy = failedCount > 0
+      ? ` ${failedCount} ${failedCount === 1 ? 'file' : 'files'} could not be moved.`
+      : '';
 
-    setCanWrite(false);
-    setUser(null);
-    setAuthNotice('Write access was cleared. Sign in again to run another scan.');
-  }, []);
-
-  const handlePurgeAuthData = useCallback(async () => {
     signOut();
-    clearWorkflowState();
     await purgeAppBrowserData();
+    clearWorkflowState();
     setUser(null);
     setCanWrite(false);
-    setAuthNotice('App auth data was purged from this browser.');
+    setAuthNotice(null);
+    setCompletionNotice(`${successCount} ${fileLabel} deduped.${failureCopy} App auth and local data were purged.`);
     setAuthError(null);
+    setScreen('account');
   }, [clearWorkflowState]);
 
   useEffect(() => {
@@ -220,6 +224,7 @@ export default function App() {
           <AccountScreen
             error={authError}
             notice={authNotice}
+            completionNotice={completionNotice}
             user={user}
             onSignIn={handleSignIn}
             onSignOut={handleSignOut}
@@ -248,8 +253,7 @@ export default function App() {
             decisions={decisions}
             dupGroups={dupGroups}
             onRequestWriteAccess={handleRequestWriteAccess}
-            onReleaseWriteAccess={handleReleaseWriteAccess}
-            onPurgeAuthData={handlePurgeAuthData}
+            onComplete={handleExecuteComplete}
           />
         )}
       </main>
