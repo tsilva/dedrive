@@ -9,7 +9,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecute }) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedKeepIds, setSelectedKeepIds] = useState([]);
+  const [selectedDiscardIds, setSelectedDiscardIds] = useState([]);
 
   // Filter to only show groups that haven't been decided yet
   const pendingGroups = useMemo(() => {
@@ -27,10 +27,13 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
   const group = pendingGroups[currentIndex] || null;
   const progress = dupGroups.length - pendingGroups.length;
   const total = dupGroups.length;
-  const selectedKeepIdSet = useMemo(() => new Set(selectedKeepIds), [selectedKeepIds]);
-  const currentMoveCount = group ? group.files.length - selectedKeepIdSet.size : 0;
+  const selectedDiscardIdSet = useMemo(() => new Set(selectedDiscardIds), [selectedDiscardIds]);
+  const currentMoveCount = selectedDiscardIds.length;
   const decidedGroups = useMemo(() => {
-    return dupGroups.filter((currentGroup) => decisions[currentGroup.md5]?.action === 'keep');
+    return dupGroups.filter((currentGroup) => {
+      const decision = decisions[currentGroup.md5];
+      return decision && decision.action !== 'skip';
+    });
   }, [decisions, dupGroups]);
   const moveCount = useMemo(() => {
     return decidedGroups.reduce((count, currentGroup) => {
@@ -39,13 +42,13 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
   }, [decidedGroups, decisions]);
 
   useEffect(() => {
-    setSelectedKeepIds([]);
+    setSelectedDiscardIds([]);
   }, [group?.md5]);
 
-  const handleToggleKeepByIndex = useCallback((fileIndex) => {
+  const handleToggleDiscardByIndex = useCallback((fileIndex) => {
     if (!group || fileIndex >= group.files.length) return;
     const file = group.files[fileIndex];
-    setSelectedKeepIds((current) => {
+    setSelectedDiscardIds((current) => {
       if (current.includes(file.id)) {
         return current.filter((id) => id !== file.id);
       }
@@ -54,9 +57,9 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
   }, [group]);
 
   const handleConfirmCurrent = useCallback(() => {
-    if (!group || selectedKeepIds.length === 0) return;
-    onDecision(group.md5, { keepIds: selectedKeepIds, action: 'keep' });
-  }, [group, onDecision, selectedKeepIds]);
+    if (!group) return;
+    onDecision(group.md5, { discardIds: selectedDiscardIds, action: 'discard' });
+  }, [group, onDecision, selectedDiscardIds]);
 
   const handleSkipCurrent = useCallback(() => {
     if (!group) return;
@@ -71,7 +74,7 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
   useKeyboardShortcuts({
     enabled: Boolean(group),
     maxIndex: group?.files.length ?? 0,
-    onSelectIndex: handleToggleKeepByIndex,
+    onSelectIndex: handleToggleDiscardByIndex,
     onSkipCurrent: handleSkipCurrent,
     onConfirmCurrent: handleConfirmCurrent,
     onExecute: handleExecute,
@@ -142,7 +145,7 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
             disabled={moveCount === 0}
             title="Go to execute (E)"
           >
-            Go to Execute ({moveCount} file{moveCount === 1 ? '' : 's'} selected)
+            Go to Execute ({moveCount} file{moveCount === 1 ? '' : 's'} marked)
           </button>
         </div>
       </div>
@@ -153,10 +156,10 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
           {group.files.length} files • {formatSize(group.wastedSize)} wasted
         </div>
         <div className="group-hint">
-          Press 1-9 to toggle files to keep, Enter or N for next, S to skip, E to execute.
+          Press 1-9 to mark duplicates to discard, Enter or N for next, S to skip, E to execute.
         </div>
         <div className="group-selection-summary">
-          {selectedKeepIds.length} selected to keep • {currentMoveCount} will move when this group is confirmed
+          {selectedDiscardIds.length} selected to discard • {group.files.length - currentMoveCount} will be kept
         </div>
         {group.uncertain && (
           <div className="group-warning">Size mismatch - review carefully</div>
@@ -167,10 +170,9 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
         <button
           className="btn btn-primary"
           onClick={handleConfirmCurrent}
-          disabled={selectedKeepIds.length === 0}
-          title="Keep selected files and move to next group (Enter or N)"
+          title="Confirm this group and move to next group (Enter or N)"
         >
-          Keep Selected and Next
+          {selectedDiscardIds.length === 0 ? 'Keep All and Next' : 'Discard Selected and Next'}
         </button>
       </div>
 
@@ -178,21 +180,21 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
         {group.files.map((f, i) => (
           <div
             key={f.id}
-            className={`file-card${selectedKeepIdSet.has(f.id) ? ' file-keep' : ''}`}
+            className={`file-card${selectedDiscardIdSet.has(f.id) ? ' file-discard' : ''}`}
             data-index={i}
           >
             <div className="file-card-toolbar">
               <button
-                className={`file-choice-badge${selectedKeepIdSet.has(f.id) ? ' active' : ''}`}
-                onClick={() => handleToggleKeepByIndex(i)}
-                aria-label={`${selectedKeepIdSet.has(f.id) ? 'Stop keeping' : 'Keep'} file ${i + 1}: ${f.name}`}
-                aria-pressed={selectedKeepIdSet.has(f.id)}
+                className={`file-choice-badge${selectedDiscardIdSet.has(f.id) ? ' active' : ''}`}
+                onClick={() => handleToggleDiscardByIndex(i)}
+                aria-label={`${selectedDiscardIdSet.has(f.id) ? 'Keep' : 'Discard'} file ${i + 1}: ${f.name}`}
+                aria-pressed={selectedDiscardIdSet.has(f.id)}
                 title={`Toggle file ${i + 1}`}
               >
                 {i + 1}
               </button>
               <div className="file-choice-copy">
-                {selectedKeepIdSet.has(f.id) ? 'Selected to keep' : 'Move unless selected'}
+                {selectedDiscardIdSet.has(f.id) ? 'Selected to discard' : 'Kept unless selected'}
               </div>
             </div>
             <div className="file-preview">
