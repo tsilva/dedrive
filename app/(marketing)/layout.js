@@ -113,7 +113,7 @@ const jsonLd = {
       featureList: [
         'Find duplicate files in Google Drive by checksum',
         'Scan with read-only access before any write permission is requested',
-        'Preview image, PDF, and text matches before choosing what to keep',
+        'Preview image, PDF, and text matches before marking duplicates to move',
         'Move extra copies into a _dupes folder instead of deleting them',
       ],
       offers: {

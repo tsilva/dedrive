@@ -5,7 +5,7 @@ import { formatSize } from '@/lib/utils';
 import { getSettings } from '@/lib/state';
 import { moveFile, ensureDedupeRootFolder, ensureFolderPath } from '@/lib/drive';
 import { isInDedupeFolder } from '@/lib/dedup';
-import { getDecisionKeepIds } from '@/lib/decisions';
+import { getDecisionDiscardIds } from '@/lib/decisions';
 import { pooledMap } from '@/lib/utils';
 import { trackEvent, trackException } from '@/lib/analytics';
 
@@ -30,11 +30,11 @@ export default function ExecuteScreen({
     const list = [];
     for (const g of dupGroups) {
       const d = decisions[g.md5];
-      if (!d || d.action !== 'keep') continue;
-      const keepIds = new Set(getDecisionKeepIds(d));
-      if (keepIds.size === 0) continue;
+      if (!d || d.action === 'skip') continue;
+      const discardIds = new Set(getDecisionDiscardIds(g, d));
+      if (discardIds.size === 0) continue;
       for (const f of g.files) {
-        if (!keepIds.has(f.id) && !isInDedupeFolder(f, settings.dupesFolder)) {
+        if (discardIds.has(f.id) && !isInDedupeFolder(f, settings.dupesFolder)) {
           list.push(f);
         }
       }
@@ -133,7 +133,7 @@ export default function ExecuteScreen({
       <div className="setup-title" style={{ marginBottom: 24 }}>Execute</div>
 
       {moves.length === 0 ? (
-        <div className="empty-state">No files selected to move.</div>
+        <div className="empty-state">No files marked to move.</div>
       ) : (
         <>
           <div className="dry-run-header">

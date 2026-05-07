@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getPreview, getMimeIcon } from '@/lib/preview';
 import PdfPreview from './PdfPreview';
 
@@ -10,12 +10,16 @@ export default function FilePreview({ file }) {
   const [error, setError] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [pdfPage, setPdfPage] = useState(1);
+  const [pdfPageCount, setPdfPageCount] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     setZoom(1); // Reset zoom when file changes
+    setPdfPage(1);
+    setPdfPageCount(null);
 
     getPreview(file)
       .then((result) => {
@@ -34,15 +38,44 @@ export default function FilePreview({ file }) {
     return () => { cancelled = true; };
   }, [file.id]);
 
+  const closeFullscreen = useCallback(() => {
+    setIsFullscreen(false);
+    setZoom(1);
+    setPdfPage(1);
+  }, []);
+
+  const isPdfPreview = preview?.type === 'pdf';
+  const canGoToPreviousPdfPage = isPdfPreview && pdfPage > 1;
+  const canGoToNextPdfPage = isPdfPreview && (!pdfPageCount || pdfPage < pdfPageCount);
+  const goToPreviousPdfPage = useCallback(() => {
+    setPdfPage((page) => Math.max(1, page - 1));
+  }, []);
+  const goToNextPdfPage = useCallback(() => {
+    setPdfPage((page) => (pdfPageCount ? Math.min(pdfPageCount, page + 1) : page + 1));
+  }, [pdfPageCount]);
+  const handlePdfPageCountChange = useCallback((count) => {
+    setPdfPageCount(count);
+    setPdfPage((page) => Math.min(page, count));
+  }, []);
+
   // Close fullscreen on escape key and prevent body scroll
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && isFullscreen) {
-        setIsFullscreen(false);
-        setZoom(1);
+        closeFullscreen();
+        return;
       }
-      // Zoom shortcuts
       if (isFullscreen) {
+        if (isPdfPreview && (e.key === 'ArrowLeft' || e.key === 'PageUp')) {
+          e.preventDefault();
+          goToPreviousPdfPage();
+          return;
+        }
+        if (isPdfPreview && (e.key === 'ArrowRight' || e.key === 'PageDown')) {
+          e.preventDefault();
+          goToNextPdfPage();
+          return;
+        }
         if ((e.ctrlKey || e.metaKey) && e.key === '=') {
           e.preventDefault();
           setZoom(z => Math.min(4, z + 0.25));
@@ -69,7 +102,14 @@ export default function FilePreview({ file }) {
       window.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [isFullscreen]);
+  }, [
+    closeFullscreen,
+    goToNextPdfPage,
+    goToPreviousPdfPage,
+    isFullscreen,
+    isPdfPreview,
+    pdfPageCount,
+  ]);
 
   if (loading) {
     return <div className="preview-loading">Loading preview...</div>;
@@ -109,7 +149,15 @@ export default function FilePreview({ file }) {
     }
 
     if (preview.type === 'pdf') {
-      return <PdfPreview blob={preview.blob} fullscreen={fullscreen} zoom={zoomLevel} />;
+      return (
+        <PdfPreview
+          blob={preview.blob}
+          fullscreen={fullscreen}
+          zoom={zoomLevel}
+          pageNumber={fullscreen ? pdfPage : 1}
+          onPageCountChange={handlePdfPageCountChange}
+        />
+      );
     }
 
     if (preview.type === 'text') {
@@ -140,37 +188,66 @@ export default function FilePreview({ file }) {
       </div>
 
       {isFullscreen && (
-        <div className="fullscreen-modal-overlay" onClick={() => { setIsFullscreen(false); setZoom(1); }}>
+        <div className="fullscreen-modal-overlay" onClick={closeFullscreen}>
           <div className="fullscreen-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="fullscreen-modal-header">
               <div className="fullscreen-modal-title">{file.path || file.name}</div>
               <div className="fullscreen-modal-controls">
+                {isPdfPreview && (
+                  <div className="fullscreen-modal-page-controls" aria-label="PDF page controls">
+                    <button
+                      className="fullscreen-modal-control-btn"
+                      onClick={goToPreviousPdfPage}
+                      disabled={!canGoToPreviousPdfPage}
+                      aria-label="Previous PDF page"
+                      title="Previous page (Left arrow)"
+                    >
+                      ‹
+                    </button>
+                    <span className="fullscreen-modal-page-status" aria-live="polite">
+                      Page {pdfPage}{pdfPageCount ? ` of ${pdfPageCount}` : ''}
+                    </span>
+                    <button
+                      className="fullscreen-modal-control-btn"
+                      onClick={goToNextPdfPage}
+                      disabled={!canGoToNextPdfPage}
+                      aria-label="Next PDF page"
+                      title="Next page (Right arrow)"
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
                 <button
-                  className="fullscreen-modal-zoom-btn"
+                  className="fullscreen-modal-control-btn"
                   onClick={() => setZoom(z => Math.max(0.25, z - 0.25))}
                   title="Zoom out (-)"
+                  aria-label="Zoom out"
                 >
                   −
                 </button>
                 <span className="fullscreen-modal-zoom-level">{Math.round(zoom * 100)}%</span>
                 <button
-                  className="fullscreen-modal-zoom-btn"
+                  className="fullscreen-modal-control-btn"
                   onClick={() => setZoom(z => Math.min(4, z + 0.25))}
                   title="Zoom in (+)"
+                  aria-label="Zoom in"
                 >
                   +
                 </button>
                 <button
-                  className="fullscreen-modal-zoom-btn"
+                  className="fullscreen-modal-control-btn"
                   onClick={() => setZoom(1)}
                   title="Reset zoom (0)"
+                  aria-label="Reset zoom"
                 >
                   ↺
                 </button>
                 <button
                   className="fullscreen-modal-close"
-                  onClick={() => { setIsFullscreen(false); setZoom(1); }}
+                  onClick={closeFullscreen}
                   title="Close (Esc)"
+                  aria-label="Close fullscreen preview"
                 >
                   ×
                 </button>

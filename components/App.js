@@ -165,7 +165,10 @@ export default function App() {
   }, [clearWorkflowState, save]);
 
   const handleExecute = useCallback(() => {
-    const decidedGroups = dupGroups.filter((group) => decisions[group.md5]?.action === 'keep');
+    const decidedGroups = dupGroups.filter((group) => {
+      const decision = decisions[group.md5];
+      return decision && decision.action !== 'skip';
+    });
     const reviewedGroups = dupGroups.filter((group) => decisions[group.md5]);
     const skippedGroups = dupGroups.filter((group) => decisions[group.md5]?.action === 'skip');
     const moveCount = decidedGroups.reduce((count, group) => {
@@ -174,7 +177,7 @@ export default function App() {
 
     trackEvent('review_completed', {
       reviewed_group_count: reviewedGroups.length,
-      keep_group_count: decidedGroups.length,
+      discard_review_group_count: decidedGroups.length,
       skipped_group_count: skippedGroups.length,
       remaining_group_count: dupGroups.length - reviewedGroups.length,
       move_candidate_count: moveCount,
