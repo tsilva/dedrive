@@ -677,10 +677,23 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   margin-top: 8px;
 }
 
+.group-selection-summary {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  margin-top: 8px;
+}
+
 .group-warning {
   font-size: 12px;
   color: var(--accent-warning);
   margin-top: 4px;
+}
+
+.group-confirm-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
 }
 
 .files-grid {
@@ -698,7 +711,10 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   transition: border-color 0.15s;
 }
 
-.file-card.file-keep { border-color: var(--accent-keep); }
+.file-card.file-keep {
+  border-color: var(--accent-keep);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.25);
+}
 
 .file-card-toolbar {
   display: flex;
@@ -730,6 +746,12 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   border-color: var(--accent-keep);
   color: #04130a;
   transform: translateY(-1px);
+}
+
+.file-choice-badge.active {
+  background: var(--accent-keep);
+  border-color: var(--accent-keep);
+  color: #04130a;
 }
 
 .file-choice-copy {

@@ -20,6 +20,7 @@ import {
 import { clearFolderCache, getUserInfo, fetchAllFiles } from '@/lib/drive';
 import { excludeDedupeFolderFiles, findDuplicates, resolvePaths, computeStats } from '@/lib/dedup';
 import { clearPreviewCache } from '@/lib/preview';
+import { countMovableFiles } from '@/lib/decisions';
 import { getSettings, purgeAppBrowserData } from '@/lib/state';
 import { trackEvent, trackException } from '@/lib/analytics';
 
@@ -168,8 +169,7 @@ export default function App() {
     const reviewedGroups = dupGroups.filter((group) => decisions[group.md5]);
     const skippedGroups = dupGroups.filter((group) => decisions[group.md5]?.action === 'skip');
     const moveCount = decidedGroups.reduce((count, group) => {
-      const keepId = decisions[group.md5]?.keep;
-      return count + group.files.filter((file) => file.id !== keepId).length;
+      return count + countMovableFiles(group, decisions[group.md5]);
     }, 0);
 
     trackEvent('review_completed', {

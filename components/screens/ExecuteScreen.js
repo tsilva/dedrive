@@ -5,6 +5,7 @@ import { formatSize } from '@/lib/utils';
 import { getSettings } from '@/lib/state';
 import { moveFile, ensureDedupeRootFolder, ensureFolderPath } from '@/lib/drive';
 import { isInDedupeFolder } from '@/lib/dedup';
+import { getDecisionKeepIds } from '@/lib/decisions';
 import { pooledMap } from '@/lib/utils';
 import { trackEvent, trackException } from '@/lib/analytics';
 
@@ -30,8 +31,10 @@ export default function ExecuteScreen({
     for (const g of dupGroups) {
       const d = decisions[g.md5];
       if (!d || d.action !== 'keep') continue;
+      const keepIds = new Set(getDecisionKeepIds(d));
+      if (keepIds.size === 0) continue;
       for (const f of g.files) {
-        if (f.id !== d.keep && !isInDedupeFolder(f, settings.dupesFolder)) {
+        if (!keepIds.has(f.id) && !isInDedupeFolder(f, settings.dupesFolder)) {
           list.push(f);
         }
       }
