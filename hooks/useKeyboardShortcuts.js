@@ -34,11 +34,27 @@ function getShortcutIndex(event) {
   return null;
 }
 
-export function useKeyboardShortcuts({ enabled = true, maxIndex = 0, onSelectIndex, onSkipCurrent }) {
+function isButtonTarget(target) {
+  return target instanceof HTMLElement && Boolean(target.closest('button, a, [role="button"]'));
+}
+
+export function useKeyboardShortcuts({
+  enabled = true,
+  maxIndex = 0,
+  onSelectIndex,
+  onSkipCurrent,
+  onConfirmCurrent,
+  onExecute,
+}) {
   useEffect(() => {
     if (
       !enabled
-      || (typeof onSelectIndex !== 'function' && typeof onSkipCurrent !== 'function')
+      || (
+        typeof onSelectIndex !== 'function'
+        && typeof onSkipCurrent !== 'function'
+        && typeof onConfirmCurrent !== 'function'
+        && typeof onExecute !== 'function'
+      )
     ) {
       return undefined;
     }
@@ -57,9 +73,24 @@ export function useKeyboardShortcuts({ enabled = true, maxIndex = 0, onSelectInd
         return;
       }
 
-      if (event.key.toLowerCase() === 's' && typeof onSkipCurrent === 'function') {
+      const key = event.key.toLowerCase();
+
+      if (key === 's' && typeof onSkipCurrent === 'function') {
         event.preventDefault();
         onSkipCurrent();
+        return;
+      }
+
+      if ((key === 'n' || event.key === 'Enter') && typeof onConfirmCurrent === 'function') {
+        if (event.key === 'Enter' && isButtonTarget(event.target)) return;
+        event.preventDefault();
+        onConfirmCurrent();
+        return;
+      }
+
+      if (key === 'e' && typeof onExecute === 'function') {
+        event.preventDefault();
+        onExecute();
         return;
       }
 
@@ -74,5 +105,5 @@ export function useKeyboardShortcuts({ enabled = true, maxIndex = 0, onSelectInd
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [enabled, maxIndex, onSelectIndex, onSkipCurrent]);
+  }, [enabled, maxIndex, onSelectIndex, onSkipCurrent, onConfirmCurrent, onExecute]);
 }

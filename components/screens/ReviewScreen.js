@@ -3,11 +3,13 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { formatSize, formatDate } from '@/lib/utils';
 import { prefetchPreview } from '@/lib/preview';
+import { countMovableFiles } from '@/lib/decisions';
 import FilePreview from '@/components/FilePreview';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecute }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedKeepIds, setSelectedKeepIds] = useState([]);
 
   // Filter to only show groups that haven't been decided yet
   const pendingGroups = useMemo(() => {
@@ -25,32 +27,54 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
   const group = pendingGroups[currentIndex] || null;
   const progress = dupGroups.length - pendingGroups.length;
   const total = dupGroups.length;
+  const selectedKeepIdSet = useMemo(() => new Set(selectedKeepIds), [selectedKeepIds]);
+  const currentMoveCount = group ? group.files.length - selectedKeepIdSet.size : 0;
   const decidedGroups = useMemo(() => {
     return dupGroups.filter((currentGroup) => decisions[currentGroup.md5]?.action === 'keep');
   }, [decisions, dupGroups]);
   const moveCount = useMemo(() => {
     return decidedGroups.reduce((count, currentGroup) => {
-      const keepId = decisions[currentGroup.md5]?.keep;
-      return count + currentGroup.files.filter((file) => file.id !== keepId).length;
+      return count + countMovableFiles(currentGroup, decisions[currentGroup.md5]);
     }, 0);
   }, [decidedGroups, decisions]);
 
-  const handleKeepByIndex = useCallback((fileIndex) => {
+  useEffect(() => {
+    setSelectedKeepIds([]);
+  }, [group?.md5]);
+
+  const handleToggleKeepByIndex = useCallback((fileIndex) => {
     if (!group || fileIndex >= group.files.length) return;
     const file = group.files[fileIndex];
-    onDecision(group.md5, { keep: file.id, action: 'keep' });
-  }, [group, onDecision]);
+    setSelectedKeepIds((current) => {
+      if (current.includes(file.id)) {
+        return current.filter((id) => id !== file.id);
+      }
+      return [...current, file.id];
+    });
+  }, [group]);
+
+  const handleConfirmCurrent = useCallback(() => {
+    if (!group || selectedKeepIds.length === 0) return;
+    onDecision(group.md5, { keepIds: selectedKeepIds, action: 'keep' });
+  }, [group, onDecision, selectedKeepIds]);
 
   const handleSkipCurrent = useCallback(() => {
     if (!group) return;
     onDecision(group.md5, { action: 'skip' });
   }, [group, onDecision]);
 
+  const handleExecute = useCallback(() => {
+    if (moveCount === 0) return;
+    onExecute?.();
+  }, [moveCount, onExecute]);
+
   useKeyboardShortcuts({
     enabled: Boolean(group),
     maxIndex: group?.files.length ?? 0,
-    onSelectIndex: handleKeepByIndex,
+    onSelectIndex: handleToggleKeepByIndex,
     onSkipCurrent: handleSkipCurrent,
+    onConfirmCurrent: handleConfirmCurrent,
+    onExecute: handleExecute,
   });
 
   // Prefetch previews for upcoming groups (next 2 groups)
@@ -108,13 +132,15 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
           <button
             className="btn btn-skip"
             onClick={handleSkipCurrent}
+            title="Skip this group (S)"
           >
             Skip Current
           </button>
           <button
             className="btn"
-            onClick={() => onExecute?.()}
+            onClick={handleExecute}
             disabled={moveCount === 0}
+            title="Go to execute (E)"
           >
             Go to Execute ({moveCount} file{moveCount === 1 ? '' : 's'} selected)
           </button>
@@ -127,30 +153,47 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
           {group.files.length} files • {formatSize(group.wastedSize)} wasted
         </div>
         <div className="group-hint">
-          Click a numbered badge or press 1-9 to keep that file. Press S to skip this group.
+          Press 1-9 to toggle files to keep, Enter or N for next, S to skip, E to execute.
+        </div>
+        <div className="group-selection-summary">
+          {selectedKeepIds.length} selected to keep • {currentMoveCount} will move when this group is confirmed
         </div>
         {group.uncertain && (
           <div className="group-warning">Size mismatch - review carefully</div>
         )}
       </div>
 
+      <div className="group-confirm-row">
+        <button
+          className="btn btn-primary"
+          onClick={handleConfirmCurrent}
+          disabled={selectedKeepIds.length === 0}
+          title="Keep selected files and move to next group (Enter or N)"
+        >
+          Keep Selected and Next
+        </button>
+      </div>
+
       <div className="files-grid">
         {group.files.map((f, i) => (
           <div
             key={f.id}
-            className="file-card"
+            className={`file-card${selectedKeepIdSet.has(f.id) ? ' file-keep' : ''}`}
             data-index={i}
           >
             <div className="file-card-toolbar">
               <button
-                className="file-choice-badge"
-                onClick={() => handleKeepByIndex(i)}
-                aria-label={`Keep file ${i + 1}: ${f.name}`}
-                title={`Keep file ${i + 1}`}
+                className={`file-choice-badge${selectedKeepIdSet.has(f.id) ? ' active' : ''}`}
+                onClick={() => handleToggleKeepByIndex(i)}
+                aria-label={`${selectedKeepIdSet.has(f.id) ? 'Stop keeping' : 'Keep'} file ${i + 1}: ${f.name}`}
+                aria-pressed={selectedKeepIdSet.has(f.id)}
+                title={`Toggle file ${i + 1}`}
               >
                 {i + 1}
               </button>
-              <div className="file-choice-copy">Keep this file</div>
+              <div className="file-choice-copy">
+                {selectedKeepIdSet.has(f.id) ? 'Selected to keep' : 'Move unless selected'}
+              </div>
             </div>
             <div className="file-preview">
               <FilePreview file={f} />

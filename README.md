@@ -6,7 +6,7 @@
   [Live Demo](https://dedrive.tsilva.eu)
 </div>
 
-dedrive is a browser-based Google Drive duplicate finder built with Next.js. It scans your own Drive files, groups exact matches by checksum, and lets you review or skip duplicate groups before making any changes.
+dedrive is a browser-based Google Drive duplicate finder built with Next.js. It scans your own Drive files, groups exact matches by checksum, and lets you review, keep one or more copies, or skip duplicate groups before making any changes.
 
 The cleanup flow starts with read-only Drive access. If you choose to proceed, dedrive asks for write access only before moving unchosen copies into a `_dupes` folder.
 
@@ -47,6 +47,7 @@ pnpm start    # serve the production build
 - After execution, app auth data and app-owned local browser storage are purged automatically before returning to the initial screen.
 - Scan results and review decisions stay in the active browser tab. Non-sensitive settings use `localStorage`.
 - Google Workspace native files are skipped because they do not expose `md5Checksum`.
+- During review, select every copy you want to keep, then move to the next group. Number keys toggle files, Enter/N confirms the current group, S skips, and E moves to execution.
 - Duplicates are moved into `_dupes`; dedrive ignores files already there on future scans and does not permanently delete files.
 
 ## Architecture
