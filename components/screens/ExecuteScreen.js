@@ -31,7 +31,7 @@ export default function ExecuteScreen({
     for (const g of dupGroups) {
       const d = decisions[g.md5];
       if (!d || d.action === 'skip') continue;
-      const discardIds = new Set(getDecisionDiscardIds(g, d));
+      const discardIds = new Set(getDecisionDiscardIds(d));
       if (discardIds.size === 0) continue;
       for (const f of g.files) {
         if (discardIds.has(f.id) && !isInDedupeFolder(f, settings.dupesFolder)) {

@@ -1,8 +1,6 @@
-'use client';
-
 import { SCREEN_STEPS } from './screen-steps';
 
-export default function Header({ screen, user }) {
+export default function Header({ screen = 'account', user = null }) {
   const getScreenStatus = (id) => {
     const order = ['account', 'scan', 'review', 'execute'];
     const currentIdx = order.indexOf(screen);
@@ -22,6 +20,7 @@ export default function Header({ screen, user }) {
             <div
               key={s.id}
               className={`nav-item nav-item-${status}${status === 'active' ? ' active' : ''}`}
+              aria-current={status === 'active' ? 'step' : undefined}
             >
               {status === 'completed' ? '✓ ' : ''}{s.label}
             </div>

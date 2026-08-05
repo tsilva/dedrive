@@ -1,15 +1,15 @@
-import MarketingFooter from '@/components/MarketingFooter';
-import MarketingHeader from '@/components/MarketingHeader';
+import Footer from '@/components/Footer';
+import Header from '@/components/Header';
 import MarketingHero from '@/components/MarketingHero';
 
 export default function MarketingPage() {
   return (
     <div className="app">
-      <MarketingHeader />
+      <Header />
       <main className="main">
         <MarketingHero />
       </main>
-      <MarketingFooter />
+      <Footer />
     </div>
   );
 }
