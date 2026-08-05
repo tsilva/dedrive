@@ -8,7 +8,6 @@ import Header from './Header';
 import Footer from './Footer';
 import AccountScreen from './screens/AccountScreen';
 import { useDecisions } from '@/hooks/useDecisions';
-import { useScanResults } from '@/hooks/useScanResults';
 import {
   hasWriteAccess,
   initAuth,
@@ -44,7 +43,7 @@ export default function App() {
   const [scanProgress, setScanProgress] = useState({ page: 0, fileCount: 0 });
   const [scanError, setScanError] = useState(null);
   const { decisions, setDecision, clearDecisions } = useDecisions();
-  const { dupGroups, save, clear: clearScanResults } = useScanResults();
+  const [dupGroups, setDupGroups] = useState([]);
 
   const stats = dupGroups.length > 0 ? computeStats(dupGroups) : null;
 
@@ -52,11 +51,11 @@ export default function App() {
     clearPreviewCache();
     clearFolderCache();
     clearDecisions();
-    clearScanResults();
+    setDupGroups([]);
     setScanning(false);
     setScanProgress({ page: 0, fileCount: 0 });
     setScanError(null);
-  }, [clearDecisions, clearScanResults]);
+  }, [clearDecisions]);
 
   // Auth callback
   useEffect(() => {
@@ -141,7 +140,7 @@ export default function App() {
       const scannedFiles = excludeDedupeFolderFiles(resolvePaths(allFiles), settings.dupesFolder);
       const groups = findDuplicates(scannedFiles);
       const scanStats = computeStats(groups);
-      save(scannedFiles, groups);
+      setDupGroups(groups);
       trackEvent('scan_completed', {
         file_count: scannedFiles.length,
         duplicate_group_count: scanStats.totalGroups,
@@ -162,7 +161,7 @@ export default function App() {
       });
       console.error('Scan failed:', e);
     }
-  }, [clearWorkflowState, save]);
+  }, [clearWorkflowState]);
 
   const handleExecute = useCallback(() => {
     const decidedGroups = dupGroups.filter((group) => {

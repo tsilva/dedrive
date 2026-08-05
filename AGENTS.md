@@ -29,7 +29,7 @@ Next.js 16 app (App Router, JavaScript, no TypeScript) that finds and manages du
 
 1. **AccountScreen** — Google sign-in, start scan
 2. **ScanScreen** — progress while fetching all Drive files
-3. **ReviewScreen** — review duplicate groups, mark which file to keep per group
+3. **ReviewScreen** — review duplicate groups and select copies to discard
 4. **ExecuteScreen** — apply decisions (move duplicates to a `_dupes` folder)
 
 ### Key modules (`lib/`)
@@ -38,14 +38,12 @@ Next.js 16 app (App Router, JavaScript, no TypeScript) that finds and manages du
 - **drive.js** — Google Drive REST API v3 client. Handles pagination, retry with exponential backoff for 429/403, and silent token refresh on 401.
 - **dedup.js** — Groups files by `md5Checksum`, resolves full paths from parent chain, computes wasted-space stats. Skips Google Workspace native types (Docs, Sheets, etc.) since they have no md5.
 - **preview.js** — Lazy file preview with in-memory cache. Supports images (thumbnail or download), PDFs (via pdfjs-dist), and text files (first 5KB). `clearPreviewCache()` revokes blob URLs on sign-out.
-- **state.js** — Persistence layer. Settings and decisions in `localStorage` (prefixed `dedrive_`). Scan results in IndexedDB (`dedrive` DB, `scans` store) to handle large datasets.
+- **state.js** — Reads non-sensitive settings from `localStorage` and purges app-owned browser storage after execution. Scan results and review decisions remain in active-tab memory.
 
 ### Hooks (`hooks/`)
 
-- **useDecisions** — reads/writes per-group keep/skip decisions from localStorage
-- **useScanResults** — loads/saves duplicate groups from IndexedDB
+- **useDecisions** — holds per-group discard/skip decisions in active-tab memory
 - **useKeyboardShortcuts** — keyboard navigation for the review screen
-- **useSettings** — reads app settings from localStorage
 
 ### Path aliasing
 

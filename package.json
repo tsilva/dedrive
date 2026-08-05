@@ -1,9 +1,9 @@
 {
   "name": "dedrive",
   "version": "1.0.0",
+  "private": true,
   "description": "Private Google Drive duplicate finder with read-only scanning and safe cleanup into a _dupes folder.",
   "packageManager": "pnpm@10.27.0",
-  "main": "index.js",
   "scripts": {
     "preinstall": "node -e \"const ua = process.env.npm_config_user_agent || ''; if (!ua.startsWith('pnpm/')) { console.error('Use pnpm for this repo.'); process.exit(1); }\"",
     "dev": "node scripts/dev-server.mjs next dev",
@@ -21,7 +21,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/tsilva/dedrive/issues"
   },
