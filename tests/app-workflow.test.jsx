@@ -6,7 +6,9 @@ const mocks = vi.hoisted(() => ({
   ensureReadAccess: vi.fn(),
   ensureWriteAccess: vi.fn(),
   fetchAllFiles: vi.fn(),
+  getDriveRootId: vi.fn(),
   getUserInfo: vi.fn(),
+  initAuth: vi.fn(),
   requestReadAccess: vi.fn(),
   requestWriteAccess: vi.fn(),
 }));
@@ -16,13 +18,48 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock('next/script', () => ({ default: () => null }));
-vi.mock('next/dynamic', () => ({ default: () => () => null }));
+vi.mock('next/script', () => ({
+  default: ({ onLoad, onError }) => (
+    <div>
+      <button data-testid="gsi-load" onClick={onLoad}>Load GIS</button>
+      <button data-testid="gsi-error" onClick={onError}>Fail GIS</button>
+    </div>
+  ),
+}));
+vi.mock('next/dynamic', () => {
+  let dynamicIndex = 0;
+  return {
+    default: () => {
+      const componentIndex = dynamicIndex++;
+      if (componentIndex === 1) {
+        return function ReviewStub({ decisions, dupGroups, onDecision, onExecute, workflowError }) {
+          const group = dupGroups[0];
+          return (
+            <div>
+              {workflowError && <div role="alert">{workflowError}</div>}
+              <div>Decision count: {Object.keys(decisions).length}</div>
+              <button
+                onClick={() => onDecision(group.md5, {
+                  action: 'discard',
+                  discardIds: group.files.map((file) => file.id),
+                })}
+              >
+                Set unsafe decision
+              </button>
+              <button onClick={onExecute}>Attempt execute</button>
+            </div>
+          );
+        };
+      }
+      return () => null;
+    },
+  };
+});
 vi.mock('@/components/Header', () => ({ default: () => null }));
 vi.mock('@/components/Footer', () => ({ default: () => null }));
 vi.mock('@/lib/auth', () => ({
   hasWriteAccess: () => false,
-  initAuth: vi.fn(),
+  initAuth: mocks.initAuth,
   invalidateAuth: vi.fn(),
   isAuthExpiredError: (error) => error?.code === 'AUTH_EXPIRED',
   ensureReadAccess: mocks.ensureReadAccess,
@@ -33,6 +70,7 @@ vi.mock('@/lib/auth', () => ({
 }));
 vi.mock('@/lib/drive', () => ({
   clearFolderCache: vi.fn(),
+  getDriveRootId: mocks.getDriveRootId,
   getUserInfo: mocks.getUserInfo,
   fetchAllFiles: mocks.fetchAllFiles,
 }));
@@ -47,6 +85,7 @@ vi.mock('@/lib/analytics', () => ({
 }));
 
 async function signInAndStartScan() {
+  fireEvent.click(screen.getByTestId('gsi-load'));
   fireEvent.click(screen.getByRole('button', { name: /sign in with google/i }));
   const startButton = await screen.findByRole('button', { name: /start scan/i });
   fireEvent.click(startButton);
@@ -61,12 +100,13 @@ describe('top-level scan outcomes', () => {
       displayName: 'Drive User',
       emailAddress: 'drive@example.com',
     });
+    mocks.getDriveRootId.mockResolvedValue('root-id');
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   it('returns a signed-in user to Account with a success notice after a zero-result scan', async () => {
     mocks.fetchAllFiles.mockResolvedValue([]);
-    render(<App />);
+    render(<App clientId="test-client-id" />);
 
     await signInAndStartScan();
 
@@ -77,7 +117,7 @@ describe('top-level scan outcomes', () => {
 
   it('returns a signed-in user to Account with a retry message after a non-auth scan failure', async () => {
     mocks.fetchAllFiles.mockRejectedValue(new Error('Drive unavailable'));
-    render(<App />);
+    render(<App clientId="test-client-id" />);
 
     await signInAndStartScan();
 
@@ -86,5 +126,77 @@ describe('top-level scan outcomes', () => {
     });
     expect(screen.getByText('Drive User')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start scan/i })).toBeEnabled();
+  });
+
+  it('keeps sign-in disabled until GIS initialization succeeds', () => {
+    render(<App clientId="test-client-id" />);
+
+    const loadingButton = screen.getByRole('button', { name: /loading google sign-in/i });
+    expect(loadingButton).toBeDisabled();
+    fireEvent.click(loadingButton);
+    expect(mocks.requestReadAccess).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('gsi-load'));
+    expect(mocks.initAuth).toHaveBeenCalledWith('test-client-id');
+    expect(screen.getByRole('button', { name: /sign in with google/i })).toBeEnabled();
+  });
+
+  it('keeps sign-in disabled when GIS fails to load', () => {
+    render(<App clientId="test-client-id" />);
+    fireEvent.click(screen.getByTestId('gsi-error'));
+
+    expect(screen.getByRole('button', { name: /google sign-in unavailable/i })).toBeDisabled();
+    expect(screen.getByText(/check your connection and refresh/i)).toBeInTheDocument();
+  });
+
+  it('keeps sign-in disabled when GIS initialization throws', () => {
+    mocks.initAuth.mockImplementationOnce(() => {
+      throw new Error('Initialization failed');
+    });
+    render(<App clientId="test-client-id" />);
+    fireEvent.click(screen.getByTestId('gsi-load'));
+
+    expect(screen.getByRole('button', { name: /google sign-in unavailable/i })).toBeDisabled();
+    expect(screen.getByText(/could not initialize/i)).toBeInTheDocument();
+  });
+
+  it('surfaces a missing OAuth client configuration', () => {
+    render(<App clientId="" />);
+
+    expect(screen.getByRole('button', { name: /google sign-in unavailable/i })).toBeDisabled();
+    expect(screen.getByText(/oauth client id is not configured/i)).toBeInTheDocument();
+  });
+
+  it('removes an unsafe stored decision and returns the group to review', async () => {
+    mocks.fetchAllFiles.mockResolvedValue([
+      {
+        id: 'first',
+        name: 'copy.txt',
+        size: '10',
+        md5Checksum: 'checksum',
+        mimeType: 'text/plain',
+        ownedByMe: true,
+        parents: ['root-id'],
+      },
+      {
+        id: 'second',
+        name: 'copy.txt',
+        size: '10',
+        md5Checksum: 'checksum',
+        mimeType: 'text/plain',
+        ownedByMe: true,
+        parents: ['root-id'],
+      },
+    ]);
+    render(<App clientId="test-client-id" />);
+    await signInAndStartScan();
+
+    const unsafeButton = await screen.findByRole('button', { name: 'Set unsafe decision' });
+    fireEvent.click(unsafeButton);
+    expect(screen.getByText('Decision count: 1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Attempt execute' }));
+
+    await waitFor(() => expect(screen.getByText('Decision count: 0')).toBeInTheDocument());
+    expect(screen.getByRole('alert')).toHaveTextContent(/unsafe or stale selection/i);
   });
 });

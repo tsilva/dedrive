@@ -7,9 +7,17 @@ import {
   requestReadAccess,
 } from '@/lib/auth';
 import {
+  DownloadTooLargeError,
   DriveApiError,
+  UnsafeDestinationError,
+  assertPrivateFolder,
   clearFolderCache,
+  downloadFile,
+  ensureDedupeRootFolder,
+  ensureFolderPath,
+  fetchAllFiles,
   findOrCreateFolder,
+  getDriveRootId,
   getUserInfo,
   moveFile,
 } from '@/lib/drive';
@@ -110,11 +118,21 @@ describe('Drive request safety', () => {
   it('uses source folder IDs to create distinct exact-name mirrors', async () => {
     const generatedIds = ['mirror-a', 'mirror-b'];
     fetch.mockImplementation(async (url, options = {}) => {
-      if (String(url).includes('/generateIds')) {
+      const requestUrl = String(url);
+      if (requestUrl.includes('/generateIds')) {
         return jsonResponse({ ids: [generatedIds.shift()] });
       }
       if (options.method === 'POST') {
         return jsonResponse(JSON.parse(options.body));
+      }
+      if (requestUrl.includes('/files/mirror-')) {
+        return jsonResponse({
+          id: requestUrl.includes('mirror-a') ? 'mirror-a' : 'mirror-b',
+          mimeType: 'application/vnd.google-apps.folder',
+          ownedByMe: true,
+          shared: false,
+          trashed: false,
+        });
       }
       return jsonResponse({ files: [] });
     });
@@ -140,6 +158,222 @@ describe('Drive request safety', () => {
         appProperties: { dedriveSourceFolderId: 'source-b' },
       }),
     ]);
+  });
+
+  it('replaces a shared marked cleanup root without modifying the unsafe folder', async () => {
+    fetch.mockImplementation(async (url, options = {}) => {
+      const requestUrl = String(url);
+      if (requestUrl.includes('/generateIds')) return jsonResponse({ ids: ['private-root'] });
+      if (options.method === 'POST') return jsonResponse(JSON.parse(options.body));
+      if (requestUrl.includes('/files/shared-root?')) {
+        return jsonResponse({
+          id: 'shared-root',
+          mimeType: 'application/vnd.google-apps.folder',
+          ownedByMe: true,
+          shared: true,
+          trashed: false,
+        });
+      }
+      if (requestUrl.includes('/files/private-root?')) {
+        return jsonResponse({
+          id: 'private-root',
+          mimeType: 'application/vnd.google-apps.folder',
+          ownedByMe: true,
+          shared: false,
+          trashed: false,
+        });
+      }
+      if (requestUrl.includes('dedriveRole')) {
+        return jsonResponse({ files: [{ id: 'shared-root', createdTime: '2025-01-01' }] });
+      }
+      return jsonResponse({ files: [] });
+    });
+
+    await expect(ensureDedupeRootFolder('_dupes')).resolves.toEqual({
+      id: 'private-root',
+      privacyReplacementCreated: true,
+    });
+    expect(fetch.mock.calls.some(([, options]) => options?.method === 'PATCH')).toBe(false);
+  });
+
+  it('reports that a replacement was created if its post-create privacy check fails', async () => {
+    fetch.mockImplementation(async (url, options = {}) => {
+      const requestUrl = String(url);
+      if (requestUrl.includes('/generateIds')) return jsonResponse({ ids: ['unverified-root'] });
+      if (options.method === 'POST') return jsonResponse(JSON.parse(options.body));
+      if (requestUrl.includes('/files/shared-root?')) {
+        return jsonResponse({
+          id: 'shared-root',
+          mimeType: 'application/vnd.google-apps.folder',
+          ownedByMe: true,
+          shared: true,
+          trashed: false,
+        });
+      }
+      if (requestUrl.includes('/files/unverified-root?')) {
+        return jsonResponse({
+          id: 'unverified-root',
+          mimeType: 'application/vnd.google-apps.folder',
+          ownedByMe: true,
+          shared: true,
+          trashed: false,
+        });
+      }
+      if (requestUrl.includes('dedriveRole')) {
+        return jsonResponse({ files: [{ id: 'shared-root', createdTime: '2025-01-01' }] });
+      }
+      return jsonResponse({ files: [] });
+    });
+
+    await expect(ensureDedupeRootFolder('_dupes')).rejects.toMatchObject({
+      code: 'UNSAFE_DESTINATION',
+      privacyReplacementCreated: true,
+    });
+  });
+
+  it('paginates cleanup-root candidates and selects a freshly verified private folder', async () => {
+    fetch.mockImplementation(async (url) => {
+      const requestUrl = new URL(String(url));
+      if (requestUrl.pathname.endsWith('/files/private-root')) {
+        return jsonResponse({
+          id: 'private-root',
+          mimeType: 'application/vnd.google-apps.folder',
+          ownedByMe: true,
+          shared: false,
+          trashed: false,
+        });
+      }
+      if (requestUrl.searchParams.get('pageToken') === 'next-page') {
+        return jsonResponse({ files: [{ id: 'private-root', createdTime: '2025-01-02' }] });
+      }
+      return jsonResponse({
+        files: [{ id: 'missing-privacy-fields', createdTime: '2025-01-01' }],
+        nextPageToken: 'next-page',
+      });
+    });
+
+    await expect(ensureDedupeRootFolder('_dupes')).resolves.toEqual({
+      id: 'private-root',
+      privacyReplacementCreated: false,
+    });
+    expect(fetch.mock.calls.some(([url]) => String(url).includes('pageToken=next-page'))).toBe(true);
+  });
+
+  it('creates a private mirrored descendant when the marked candidate is shared', async () => {
+    fetch.mockImplementation(async (url, options = {}) => {
+      const requestUrl = String(url);
+      if (requestUrl.includes('/generateIds')) return jsonResponse({ ids: ['private-child'] });
+      if (options.method === 'POST') return jsonResponse(JSON.parse(options.body));
+      if (requestUrl.includes('/files/shared-child?')) {
+        return jsonResponse({
+          id: 'shared-child',
+          mimeType: 'application/vnd.google-apps.folder',
+          ownedByMe: true,
+          shared: true,
+          trashed: false,
+        });
+      }
+      if (requestUrl.includes('/files/private-child?')) {
+        return jsonResponse({
+          id: 'private-child',
+          mimeType: 'application/vnd.google-apps.folder',
+          ownedByMe: true,
+          shared: false,
+          trashed: false,
+        });
+      }
+      return jsonResponse({ files: [{ id: 'shared-child', createdTime: '2025-01-01' }] });
+    });
+
+    await expect(ensureFolderPath(
+      [{ id: 'source-child', name: 'Shared-looking child' }],
+      'private-root'
+    )).resolves.toEqual({ id: 'private-child', privacyReplacementCreated: true });
+  });
+
+  it('rejects a destination that became shared immediately before a move', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      id: 'destination',
+      mimeType: 'application/vnd.google-apps.folder',
+      ownedByMe: true,
+      shared: true,
+      trashed: false,
+    }));
+
+    await expect(assertPrivateFolder('destination')).rejects.toBeInstanceOf(UnsafeDestinationError);
+  });
+
+  it('fails closed when destination privacy metadata is incomplete', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      id: 'destination',
+      mimeType: 'application/vnd.google-apps.folder',
+      ownedByMe: true,
+      trashed: false,
+    }));
+
+    await expect(assertPrivateFolder('destination')).rejects.toMatchObject({
+      code: 'UNSAFE_DESTINATION',
+    });
+  });
+
+  it('stops a bounded download before returning an oversized body', async () => {
+    fetch.mockResolvedValueOnce(new Response(new Uint8Array(11), {
+      headers: { 'Content-Length': '11', 'Content-Type': 'application/pdf' },
+    }));
+
+    await expect(downloadFile('large-pdf', { maxBytes: 10 })).rejects.toBeInstanceOf(
+      DownloadTooLargeError
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('enforces the byte cap when Drive omits response length metadata', async () => {
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(6));
+        controller.enqueue(new Uint8Array(6));
+        controller.close();
+      },
+    });
+    fetch.mockResolvedValueOnce(new Response(body, {
+      headers: { 'Content-Type': 'application/pdf' },
+    }));
+
+    await expect(downloadFile('streamed-pdf', { maxBytes: 10 })).rejects.toMatchObject({
+      code: 'DOWNLOAD_TOO_LARGE',
+    });
+  });
+
+  it('does not wrap or retry an aborted Drive download', async () => {
+    const abortError = new DOMException('Aborted', 'AbortError');
+    fetch.mockRejectedValue(abortError);
+
+    await expect(downloadFile('cancelled', { signal: AbortSignal.abort() })).rejects.toBe(abortError);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves the canonical My Drive root ID', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ id: 'canonical-root' }));
+
+    await expect(getDriveRootId()).resolves.toBe('canonical-root');
+    expect(fetch.mock.calls[0][0]).toContain('/files/root?fields=id');
+  });
+
+  it('retains shared folders for ancestry without retaining shared files', async () => {
+    const onProgress = vi.fn();
+    fetch.mockResolvedValueOnce(jsonResponse({
+      files: [
+        { id: 'owned-file', name: 'owned.txt', ownedByMe: true, mimeType: 'text/plain' },
+        { id: 'shared-folder', name: 'Shared', ownedByMe: false, mimeType: 'application/vnd.google-apps.folder' },
+        { id: 'shared-file', name: 'shared.txt', ownedByMe: false, mimeType: 'text/plain' },
+      ],
+    }));
+
+    await expect(fetchAllFiles(onProgress)).resolves.toEqual([
+      expect.objectContaining({ id: 'owned-file' }),
+      expect.objectContaining({ id: 'shared-folder' }),
+    ]);
+    expect(onProgress).toHaveBeenCalledWith({ page: 1, fileCount: 1 });
   });
 
   it('reconciles an ambiguous move before deciding whether to retry', async () => {

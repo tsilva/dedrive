@@ -14,9 +14,16 @@ export default function AccountScreen({
   signInLabel = 'Sign in with Google',
   signInHelper = null,
   signInVariant = 'google',
+  signInStatus = 'ready',
 }) {
   const isGoogleSignIn = signInVariant === 'google';
   const signInClassName = isGoogleSignIn ? 'btn-google' : 'btn btn-start btn-large';
+  const signInDisabled = !signInHref && signInStatus !== 'ready';
+  const resolvedSignInLabel = signInStatus === 'loading'
+    ? 'Loading Google sign-in...'
+    : signInStatus === 'error'
+      ? 'Google sign-in unavailable'
+      : signInLabel;
   const signInContent = (
     <>
       {isGoogleSignIn ? (
@@ -32,7 +39,7 @@ export default function AccountScreen({
           <path d="m12 5 7 7-7 7" />
         </svg>
       )}
-      {signInLabel}
+      {resolvedSignInLabel}
     </>
   );
 
@@ -41,7 +48,12 @@ export default function AccountScreen({
       {signInContent}
     </Link>
   ) : (
-    <button className={signInClassName} onClick={onSignIn}>
+    <button
+      className={signInClassName}
+      onClick={onSignIn}
+      disabled={signInDisabled}
+      aria-busy={signInStatus === 'loading'}
+    >
       {signInContent}
     </button>
   );
