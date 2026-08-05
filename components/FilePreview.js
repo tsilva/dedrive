@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getPreview, getMimeIcon } from '@/lib/preview';
+import { isAuthExpiredError } from '@/lib/auth';
 import PdfPreview from './PdfPreview';
 
-export default function FilePreview({ file }) {
+export default function FilePreview({ file, onAuthExpired }) {
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -30,13 +31,17 @@ export default function FilePreview({ file }) {
       })
       .catch((e) => {
         if (!cancelled) {
+          if (isAuthExpiredError(e)) {
+            onAuthExpired?.();
+            return;
+          }
           setError(e.message);
           setLoading(false);
         }
       });
 
     return () => { cancelled = true; };
-  }, [file.id]);
+  }, [file.id, onAuthExpired]);
 
   const closeFullscreen = useCallback(() => {
     setIsFullscreen(false);

@@ -4,10 +4,18 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { formatSize, formatDate } from '@/lib/utils';
 import { prefetchPreview } from '@/lib/preview';
 import { countMovableFiles } from '@/lib/decisions';
+import { isAuthExpiredError } from '@/lib/auth';
 import FilePreview from '@/components/FilePreview';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
-export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecute }) {
+export default function ReviewScreen({
+  dupGroups,
+  decisions,
+  onDecision,
+  onExecute,
+  onNoMovesComplete,
+  onAuthExpired,
+}) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedDiscardIds, setSelectedDiscardIds] = useState([]);
 
@@ -96,15 +104,23 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
     }
 
     filesToPrefetch.forEach((file) => {
-      prefetchPreview(file).catch(() => {});
+      prefetchPreview(file).catch((error) => {
+        if (isAuthExpiredError(error)) {
+          onAuthExpired?.();
+        }
+      });
     });
-  }, [currentIndex, pendingGroups]);
+  }, [currentIndex, onAuthExpired, pendingGroups]);
 
   useEffect(() => {
     if (pendingGroups.length === 0 && dupGroups.length > 0) {
-      onExecute?.();
+      if (moveCount > 0) {
+        onExecute?.();
+      } else {
+        onNoMovesComplete?.();
+      }
     }
-  }, [pendingGroups.length, dupGroups.length, onExecute]);
+  }, [pendingGroups.length, dupGroups.length, moveCount, onExecute, onNoMovesComplete]);
 
   if (dupGroups.length === 0) {
     return (
@@ -198,7 +214,7 @@ export default function ReviewScreen({ dupGroups, decisions, onDecision, onExecu
               </div>
             </div>
             <div className="file-preview">
-              <FilePreview file={f} />
+              <FilePreview file={f} onAuthExpired={onAuthExpired} />
             </div>
             <div className="file-meta">
               <div className="file-name" title={f.path || f.name}>{f.name}</div>

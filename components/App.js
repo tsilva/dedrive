@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Script from 'next/script';
@@ -11,9 +11,12 @@ import { useDecisions } from '@/hooks/useDecisions';
 import {
   hasWriteAccess,
   initAuth,
+  invalidateAuth,
+  isAuthExpiredError,
+  ensureReadAccess,
+  ensureWriteAccess,
   requestReadAccess,
   requestWriteAccess,
-  setAuthCallback,
   signOut,
 } from '@/lib/auth';
 import { clearFolderCache, getUserInfo, fetchAllFiles } from '@/lib/drive';
@@ -44,6 +47,7 @@ export default function App() {
   const [scanError, setScanError] = useState(null);
   const { decisions, setDecision, clearDecisions } = useDecisions();
   const [dupGroups, setDupGroups] = useState([]);
+  const authExpiryHandledRef = useRef(false);
 
   const stats = dupGroups.length > 0 ? computeStats(dupGroups) : null;
 
@@ -57,18 +61,26 @@ export default function App() {
     setScanError(null);
   }, [clearDecisions]);
 
-  // Auth callback
-  useEffect(() => {
-    setAuthCallback(() => {
-      clearWorkflowState();
-      setUser(null);
-      setCanWrite(false);
-      setAuthNotice(null);
-      setCompletionNotice(null);
-      setAuthError('Your Google session expired. Sign in again.');
-      setScreen('account');
-    });
-    return () => setAuthCallback(null);
+  const handleAuthExpired = useCallback((details = {}) => {
+    if (authExpiryHandledRef.current) return;
+    authExpiryHandledRef.current = true;
+
+    invalidateAuth();
+    clearWorkflowState();
+    setUser(null);
+    setCanWrite(false);
+    setAuthNotice(null);
+    setCompletionNotice(null);
+
+    if (Number.isInteger(details.successCount) && Number.isInteger(details.total)) {
+      setAuthError(
+        `Your Google session expired after ${details.successCount} of ${details.total} files moved. ` +
+        'Completed moves remain in _dupes. Sign in again and run a new scan.'
+      );
+    } else {
+      setAuthError('Your Google session expired. Sign in again and start a new scan.');
+    }
+    setScreen('account');
   }, [clearWorkflowState]);
 
   // Auto-init auth when GSI loads
@@ -96,6 +108,7 @@ export default function App() {
       await requestReadAccess();
       const nextUser = await getUserInfo();
       clearWorkflowState();
+      authExpiryHandledRef.current = false;
       setUser(nextUser);
       setCanWrite(hasWriteAccess());
       setScreen('account');
@@ -113,6 +126,7 @@ export default function App() {
     trackEvent('sign_out');
     signOut();
     clearWorkflowState();
+    authExpiryHandledRef.current = false;
     setUser(null);
     setCanWrite(false);
     setAuthNotice(null);
@@ -132,6 +146,7 @@ export default function App() {
     setScanProgress({ page: 0, fileCount: 0 });
 
     try {
+      await ensureReadAccess();
       const allFiles = await fetchAllFiles(({ page, fileCount }) => {
         setScanProgress({ page, fileCount });
       });
@@ -151,16 +166,35 @@ export default function App() {
       setScanning(false);
       if (groups.length > 0) {
         setScreen('review');
+      } else {
+        clearWorkflowState();
+        setCompletionNotice('No duplicates found. Your Drive was left unchanged.');
+        setScreen('account');
       }
     } catch (e) {
-      setScanError(e.message);
-      setScanning(false);
       trackException('scan_failed');
       trackEvent('scan_failed', {
         error_type: e.message?.split(':')[0] || 'unknown',
       });
       console.error('Scan failed:', e);
+
+      if (isAuthExpiredError(e)) {
+        handleAuthExpired();
+        return;
+      }
+
+      clearWorkflowState();
+      setAuthError(`Scan failed: ${e.message || 'Unknown error'}. You can try again.`);
+      setScreen('account');
     }
+  }, [clearWorkflowState, handleAuthExpired]);
+
+  const handleNoMovesComplete = useCallback(() => {
+    clearWorkflowState();
+    setAuthNotice(null);
+    setAuthError(null);
+    setCompletionNotice('Review complete. No files were marked to move.');
+    setScreen('account');
   }, [clearWorkflowState]);
 
   const handleExecute = useCallback(() => {
@@ -174,6 +208,11 @@ export default function App() {
       return count + countMovableFiles(group, decisions[group.md5]);
     }, 0);
 
+    if (moveCount === 0) {
+      handleNoMovesComplete();
+      return;
+    }
+
     trackEvent('review_completed', {
       reviewed_group_count: reviewedGroups.length,
       discard_review_group_count: decidedGroups.length,
@@ -182,10 +221,15 @@ export default function App() {
       move_candidate_count: moveCount,
     });
     setScreen('execute');
-  }, [decisions, dupGroups]);
+  }, [decisions, dupGroups, handleNoMovesComplete]);
 
   const handleRequestWriteAccess = useCallback(async () => {
     await requestWriteAccess();
+    setCanWrite(hasWriteAccess());
+  }, []);
+
+  const handleEnsureWriteAccess = useCallback(async () => {
+    await ensureWriteAccess();
     setCanWrite(hasWriteAccess());
   }, []);
 
@@ -251,6 +295,8 @@ export default function App() {
             decisions={decisions}
             onDecision={setDecision}
             onExecute={handleExecute}
+            onNoMovesComplete={handleNoMovesComplete}
+            onAuthExpired={handleAuthExpired}
           />
         )}
         {screen === 'execute' && (
@@ -259,6 +305,8 @@ export default function App() {
             decisions={decisions}
             dupGroups={dupGroups}
             onRequestWriteAccess={handleRequestWriteAccess}
+            onEnsureWriteAccess={handleEnsureWriteAccess}
+            onAuthExpired={handleAuthExpired}
             onComplete={handleExecuteComplete}
           />
         )}

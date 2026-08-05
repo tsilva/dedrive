@@ -5,11 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 - `pnpm dev` — start Next.js dev server on http://localhost:3000
+- `pnpm test` — run the Vitest regression suite
 - `pnpm build` — production build
 - `pnpm start` — serve production build
 - `./setup.sh` — interactive setup: creates GCP project, enables Drive API, configures OAuth, writes `.env.local`
 
-No test runner or linter is configured.
+Vitest and React Testing Library cover workflow routing, auth-expiry execution, Drive retry/reconciliation, and structured ancestry. No linter is configured.
 
 ## Command conventions
 
@@ -35,8 +36,8 @@ Next.js 16 app (App Router, JavaScript, no TypeScript) that finds and manages du
 ### Key modules (`lib/`)
 
 - **auth.js** — Google Identity Services (GIS) token client wrapper. Uses implicit grant flow (access tokens, not ID tokens). Token stored in module-level variable.
-- **drive.js** — Google Drive REST API v3 client. Handles pagination, retry with exponential backoff for 429/403, and silent token refresh on 401.
-- **dedup.js** — Groups files by `md5Checksum`, resolves full paths from parent chain, computes wasted-space stats. Skips Google Workspace native types (Docs, Sheets, etc.) since they have no md5.
+- **drive.js** — Google Drive REST API v3 client. Handles pagination, reason-aware retries, idempotent folder creation, and parent reconciliation after ambiguous moves. A 401 invalidates auth instead of refreshing in the background.
+- **dedup.js** — Groups files by `md5Checksum`, resolves exact structured ancestry plus display paths, identifies the managed `_dupes` root, and computes wasted-space stats. Skips Google Workspace native types (Docs, Sheets, etc.) since they have no md5.
 - **preview.js** — Lazy file preview with in-memory cache. Supports images (thumbnail or download), PDFs (via pdfjs-dist), and text files (first 5KB). `clearPreviewCache()` revokes blob URLs on sign-out.
 - **state.js** — Reads non-sensitive settings from `localStorage` and purges app-owned browser storage after execution. Scan results and review decisions remain in active-tab memory.
 
