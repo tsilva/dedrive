@@ -33,6 +33,7 @@ NEXT_PUBLIC_SITE_URL=https://dedrive.tsilva.eu
 ```bash
 ./setup.sh    # configure Google Cloud OAuth, write .env.local, install deps
 pnpm dev      # start the Next.js dev server
+pnpm test     # run the Vitest regression suite
 pnpm build    # build for production
 pnpm start    # serve the production build
 ```
@@ -44,11 +45,14 @@ pnpm start    # serve the production build
 - Optional marketing-route metadata integrations use `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `GOOGLE_SITE_VERIFICATION`, `BING_SITE_VERIFICATION`, and `YANDEX_SITE_VERIFICATION`; analytics are disabled inside `/app`.
 - The privileged workflow runs at `/app`; there are no backend API routes, and the route uses a nonce-based Content Security Policy for scripts.
 - Write access is requested only for execution and is revoked after the move flow finishes.
+- Google access tokens stay in memory. Expiry is handled at the active operation boundary: a scan returns to the signed-out account screen, while execution settles already-started moves, cancels unscheduled moves, and reports the partial result.
 - After execution, app auth data and app-owned local browser storage are purged automatically before returning to the initial screen.
 - Scan results and review decisions stay in the active browser tab. Non-sensitive settings use `localStorage`.
 - Google Workspace native files are skipped because they do not expose `md5Checksum`.
+- A scan with no duplicates and a review with no files marked to move both return to the signed-in account screen with a no-change notice. Non-auth scan failures return there with a retry message.
 - During review, select every copy you want to discard, then move to the next group. If nothing is selected when you advance, every file in that group is kept. Number keys toggle files, Enter/N confirms the current group, S skips, and E moves to execution. PDF previews open fullscreen with previous/next page controls and arrow-key navigation.
-- Duplicates are moved into `_dupes`; dedrive ignores files already there on future scans and does not permanently delete files.
+- Duplicates are moved into `_dupes`; dedrive ignores files already there on future scans and does not permanently delete files. Mirrored folder ancestry is keyed by private Drive app properties and source folder IDs, so exact names—including whitespace and `/` characters—and same-named sibling folders remain distinct.
+- Drive retries are reason-aware: rate limits and safe read failures are retried, folder creation uses pre-generated IDs, and ambiguous file moves are reconciled against current parent metadata before retrying.
 
 ## Architecture
 
