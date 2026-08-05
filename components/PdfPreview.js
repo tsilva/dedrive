@@ -16,6 +16,7 @@ export default function PdfPreview({
   useEffect(() => {
     let cancelled = false;
     let loadedPdf = null;
+    let loadingTask = null;
 
     async function loadPdf() {
       setError(null);
@@ -27,7 +28,8 @@ export default function PdfPreview({
       ).toString();
 
       const arrayBuffer = await blob.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
       loadedPdf = pdf;
 
       if (cancelled) {
@@ -48,7 +50,11 @@ export default function PdfPreview({
 
     return () => {
       cancelled = true;
-      loadedPdf?.destroy?.();
+      if (loadedPdf) {
+        loadedPdf.destroy?.();
+      } else {
+        loadingTask?.destroy?.();
+      }
     };
   }, [blob, onPageCountChange]);
 

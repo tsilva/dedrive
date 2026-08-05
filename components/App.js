@@ -19,10 +19,16 @@ import {
   requestWriteAccess,
   signOut,
 } from '@/lib/auth';
-import { clearFolderCache, getUserInfo, fetchAllFiles } from '@/lib/drive';
-import { excludeDedupeFolderFiles, findDuplicates, resolvePaths, computeStats } from '@/lib/dedup';
+import { clearFolderCache, getDriveRootId, getUserInfo, fetchAllFiles } from '@/lib/drive';
+import {
+  excludeDedupeFolderFiles,
+  filterOwnedMyDriveTree,
+  findDuplicates,
+  resolvePaths,
+  computeStats,
+} from '@/lib/dedup';
 import { clearPreviewCache } from '@/lib/preview';
-import { countMovableFiles } from '@/lib/decisions';
+import { countMovableFiles, validateDiscardDecision } from '@/lib/decisions';
 import { getSettings, purgeAppBrowserData } from '@/lib/state';
 import { trackEvent, trackException } from '@/lib/analytics';
 
@@ -31,12 +37,15 @@ const ScanScreen = dynamic(() => import('./screens/ScanScreen'));
 const ReviewScreen = dynamic(() => import('./screens/ReviewScreen'));
 const ExecuteScreen = dynamic(() => import('./screens/ExecuteScreen'));
 
-export default function App() {
+export default function App({ clientId = CLIENT_ID }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [screen, setScreen] = useState('account');
-  const [gsiLoaded, setGsiLoaded] = useState(false);
+  const [authInitStatus, setAuthInitStatus] = useState(clientId ? 'loading' : 'error');
+  const [authInitError, setAuthInitError] = useState(
+    clientId ? null : 'Google sign-in is unavailable because the OAuth client ID is not configured.'
+  );
   const [user, setUser] = useState(null);
   const [authNotice, setAuthNotice] = useState(null);
   const [completionNotice, setCompletionNotice] = useState(null);
@@ -45,7 +54,8 @@ export default function App() {
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState({ page: 0, fileCount: 0 });
   const [scanError, setScanError] = useState(null);
-  const { decisions, setDecision, clearDecisions } = useDecisions();
+  const [reviewError, setReviewError] = useState(null);
+  const { decisions, setDecision, removeDecisions, clearDecisions } = useDecisions();
   const [dupGroups, setDupGroups] = useState([]);
   const authExpiryHandledRef = useRef(false);
 
@@ -59,6 +69,7 @@ export default function App() {
     setScanning(false);
     setScanProgress({ page: 0, fileCount: 0 });
     setScanError(null);
+    setReviewError(null);
   }, [clearDecisions]);
 
   const handleAuthExpired = useCallback((details = {}) => {
@@ -72,33 +83,44 @@ export default function App() {
     setAuthNotice(null);
     setCompletionNotice(null);
 
+    const destinationCopy = details.destinationNotice ? ` ${details.destinationNotice}` : '';
     if (Number.isInteger(details.successCount) && Number.isInteger(details.total)) {
       setAuthError(
         `Your Google session expired after ${details.successCount} of ${details.total} files moved. ` +
-        'Completed moves remain in _dupes. Sign in again and run a new scan.'
+        `Completed moves remain in _dupes. Sign in again and run a new scan.${destinationCopy}`
       );
     } else {
-      setAuthError('Your Google session expired. Sign in again and start a new scan.');
+      setAuthError(`Your Google session expired. Sign in again and start a new scan.${destinationCopy}`);
     }
     setScreen('account');
   }, [clearWorkflowState]);
 
-  // Auto-init auth when GSI loads
-  useEffect(() => {
-    if (gsiLoaded && CLIENT_ID) {
-      try {
-        initAuth(CLIENT_ID);
-      } catch (e) {
-        console.error('Auth init failed:', e);
-      }
-    }
-  }, [gsiLoaded]);
-
   const handleGsiLoad = useCallback(() => {
-    setGsiLoaded(true);
-  }, []);
+    if (!clientId) return;
+
+    try {
+      initAuth(clientId);
+      setAuthInitError(null);
+      setAuthInitStatus('ready');
+    } catch (error) {
+      console.error('Auth init failed:', error);
+      setAuthInitStatus('error');
+      setAuthInitError('Google sign-in could not initialize. Refresh the page and try again.');
+    }
+  }, [clientId]);
+
+  const handleGsiError = useCallback(() => {
+    if (!clientId) return;
+    setAuthInitStatus('error');
+    setAuthInitError('Google sign-in could not load. Check your connection and refresh the page.');
+  }, [clientId]);
 
   const handleSignIn = useCallback(async () => {
+    if (authInitStatus !== 'ready') {
+      setAuthError('Google sign-in is not ready yet. Wait for it to finish loading and try again.');
+      return;
+    }
+
     trackEvent('sign_in_started');
     setAuthNotice(null);
     setCompletionNotice(null);
@@ -120,7 +142,7 @@ export default function App() {
       setAuthError(error.message);
       console.error('Sign in failed:', error);
     }
-  }, [clearWorkflowState]);
+  }, [authInitStatus, clearWorkflowState]);
 
   const handleSignOut = useCallback(() => {
     trackEvent('sign_out');
@@ -147,12 +169,16 @@ export default function App() {
 
     try {
       await ensureReadAccess();
-      const allFiles = await fetchAllFiles(({ page, fileCount }) => {
-        setScanProgress({ page, fileCount });
-      });
+      const [rootId, allFiles] = await Promise.all([
+        getDriveRootId(),
+        fetchAllFiles(({ page, fileCount }) => {
+          setScanProgress({ page, fileCount });
+        }),
+      ]);
 
       const settings = getSettings();
-      const scannedFiles = excludeDedupeFolderFiles(resolvePaths(allFiles), settings.dupesFolder);
+      const ownedTreeFiles = filterOwnedMyDriveTree(allFiles, rootId);
+      const scannedFiles = excludeDedupeFolderFiles(resolvePaths(ownedTreeFiles), settings.dupesFolder);
       const groups = findDuplicates(scannedFiles);
       const scanStats = computeStats(groups);
       setDupGroups(groups);
@@ -197,11 +223,30 @@ export default function App() {
     setScreen('account');
   }, [clearWorkflowState]);
 
+  const handleDecision = useCallback((md5, decision) => {
+    setReviewError(null);
+    setDecision(md5, decision);
+  }, [setDecision]);
+
   const handleExecute = useCallback(() => {
     const decidedGroups = dupGroups.filter((group) => {
       const decision = decisions[group.md5];
       return decision && decision.action !== 'skip';
     });
+    const invalidGroups = decidedGroups.filter((group) => {
+      return !validateDiscardDecision(group, decisions[group.md5]).valid;
+    });
+    if (invalidGroups.length > 0) {
+      removeDecisions(invalidGroups.map((group) => group.md5));
+      setReviewError(
+        invalidGroups.length === 1
+          ? 'One duplicate group had an unsafe or stale selection. Review it again before executing.'
+          : `${invalidGroups.length} duplicate groups had unsafe or stale selections. Review them again before executing.`
+      );
+      setScreen('review');
+      return;
+    }
+
     const reviewedGroups = dupGroups.filter((group) => decisions[group.md5]);
     const skippedGroups = dupGroups.filter((group) => decisions[group.md5]?.action === 'skip');
     const moveCount = decidedGroups.reduce((count, group) => {
@@ -220,8 +265,9 @@ export default function App() {
       remaining_group_count: dupGroups.length - reviewedGroups.length,
       move_candidate_count: moveCount,
     });
+    setReviewError(null);
     setScreen('execute');
-  }, [decisions, dupGroups, handleNoMovesComplete]);
+  }, [decisions, dupGroups, handleNoMovesComplete, removeDecisions]);
 
   const handleRequestWriteAccess = useCallback(async () => {
     await requestWriteAccess();
@@ -233,7 +279,7 @@ export default function App() {
     setCanWrite(hasWriteAccess());
   }, []);
 
-  const handleExecuteComplete = useCallback(async (moveResults) => {
+  const handleExecuteComplete = useCallback(async (moveResults, details = {}) => {
     const successCount = moveResults.filter((result) => result.ok && !result.skipped).length;
     const failedCount = moveResults.filter((result) => !result.ok).length;
     const fileLabel = successCount === 1 ? 'file' : 'files';
@@ -247,7 +293,10 @@ export default function App() {
     setUser(null);
     setCanWrite(false);
     setAuthNotice(null);
-    setCompletionNotice(`${successCount} ${fileLabel} deduped.${failureCopy} App auth and local data were purged.`);
+    const destinationCopy = details.destinationNotice ? ` ${details.destinationNotice}` : '';
+    setCompletionNotice(
+      `${successCount} ${fileLabel} deduped.${failureCopy} App auth and local data were purged.${destinationCopy}`
+    );
     setAuthError(null);
     setScreen('account');
   }, [clearWorkflowState]);
@@ -266,16 +315,18 @@ export default function App() {
       <Script
         src="https://accounts.google.com/gsi/client"
         onLoad={handleGsiLoad}
+        onError={handleGsiError}
         strategy="afterInteractive"
       />
       <Header screen={screen} user={user} />
       <main className="main">
         {screen === 'account' && (
           <AccountScreen
-            error={authError}
+            error={authInitError || authError}
             notice={authNotice}
             completionNotice={completionNotice}
             user={user}
+            signInStatus={authInitStatus}
             onSignIn={handleSignIn}
             onSignOut={handleSignOut}
             onStartScan={handleStartScan}
@@ -293,10 +344,11 @@ export default function App() {
           <ReviewScreen
             dupGroups={dupGroups}
             decisions={decisions}
-            onDecision={setDecision}
+            onDecision={handleDecision}
             onExecute={handleExecute}
             onNoMovesComplete={handleNoMovesComplete}
             onAuthExpired={handleAuthExpired}
+            workflowError={reviewError}
           />
         )}
         {screen === 'execute' && (

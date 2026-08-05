@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { getPreview, getMimeIcon } from '@/lib/preview';
+import { disposePreview, getPreview, getMimeIcon } from '@/lib/preview';
 import { isAuthExpiredError } from '@/lib/auth';
 import PdfPreview from './PdfPreview';
 
@@ -15,22 +15,25 @@ export default function FilePreview({ file, onAuthExpired }) {
   const [pdfPageCount, setPdfPageCount] = useState(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    let loadedPreview = null;
     setLoading(true);
     setError(null);
+    setPreview(null);
     setZoom(1); // Reset zoom when file changes
     setPdfPage(1);
     setPdfPageCount(null);
 
-    getPreview(file)
+    getPreview(file, { signal: controller.signal })
       .then((result) => {
-        if (!cancelled) {
+        loadedPreview = result;
+        if (!controller.signal.aborted) {
           setPreview(result);
           setLoading(false);
         }
       })
       .catch((e) => {
-        if (!cancelled) {
+        if (!controller.signal.aborted && e?.name !== 'AbortError') {
           if (isAuthExpiredError(e)) {
             onAuthExpired?.();
             return;
@@ -40,7 +43,10 @@ export default function FilePreview({ file, onAuthExpired }) {
         }
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      controller.abort();
+      disposePreview(loadedPreview);
+    };
   }, [file.id, onAuthExpired]);
 
   const closeFullscreen = useCallback(() => {
@@ -125,10 +131,13 @@ export default function FilePreview({ file, onAuthExpired }) {
   }
 
   if (!preview || preview.type === 'none') {
+    const previewLabel = preview?.reason === 'too_large'
+      ? 'Preview exceeds the 10 MB limit. Open in Drive.'
+      : 'No preview available';
     return (
       <div className="preview-none">
         <div className="preview-icon">{getMimeIcon(file.mimeType)}</div>
-        <div className="preview-label">No preview available</div>
+        <div className="preview-label">{previewLabel}</div>
         <a
           href={`https://drive.google.com/file/d/${file.id}/view`}
           target="_blank"

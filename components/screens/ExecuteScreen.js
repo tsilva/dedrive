@@ -3,12 +3,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatSize } from '@/lib/utils';
 import { getSettings } from '@/lib/state';
-import { moveFile, ensureDedupeRootFolder, ensureFolderPath } from '@/lib/drive';
+import {
+  assertPrivateFolder,
+  moveFile,
+  ensureDedupeRootFolder,
+  ensureFolderPath,
+} from '@/lib/drive';
 import { isInDedupeFolder } from '@/lib/dedup';
-import { getDecisionDiscardIds } from '@/lib/decisions';
+import { validateDiscardDecision } from '@/lib/decisions';
 import { pooledMap } from '@/lib/utils';
 import { isAuthExpiredError } from '@/lib/auth';
 import { trackEvent, trackException } from '@/lib/analytics';
+
+const PRIVATE_REPLACEMENT_NOTICE =
+  'Created a private _dupes destination because an existing cleanup folder is shared.';
 
 export default function ExecuteScreen({
   canWrite,
@@ -26,17 +34,29 @@ export default function ExecuteScreen({
   const [sessionExpiring, setSessionExpiring] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState(null);
+  const [destinationNotice, setDestinationNotice] = useState(null);
   const completedRef = useRef(0);
   const executingRef = useRef(false);
   const authExpiredRef = useRef(false);
+  const destinationNoticeRef = useRef(null);
 
-  const moves = useMemo(() => {
+  function recordDestinationResult(result) {
+    if (!result?.privacyReplacementCreated) return;
+    destinationNoticeRef.current = PRIVATE_REPLACEMENT_NOTICE;
+    setDestinationNotice(PRIVATE_REPLACEMENT_NOTICE);
+  }
+
+  const movePlan = useMemo(() => {
     const settings = getSettings();
     const list = [];
     for (const g of dupGroups) {
       const d = decisions[g.md5];
       if (!d || d.action === 'skip') continue;
-      const discardIds = new Set(getDecisionDiscardIds(d));
+      const validation = validateDiscardDecision(g, d);
+      if (!validation.valid) {
+        return { moves: [], validationError: validation.error };
+      }
+      const discardIds = new Set(validation.discardIds);
       if (discardIds.size === 0) continue;
       for (const f of g.files) {
         if (discardIds.has(f.id) && !isInDedupeFolder(f, settings.dupesFolder)) {
@@ -44,8 +64,9 @@ export default function ExecuteScreen({
         }
       }
     }
-    return list;
+    return { moves: list, validationError: null };
   }, [dupGroups, decisions]);
+  const { moves, validationError } = movePlan;
 
   useEffect(() => {
     if (canWrite) {
@@ -70,7 +91,7 @@ export default function ExecuteScreen({
 
   async function handleExecute() {
     if (executingRef.current) return;
-    if (moves.length === 0 || !confirmed || !canWrite) return;
+    if (validationError || moves.length === 0 || !confirmed || !canWrite) return;
 
     executingRef.current = true;
     setGrantError(null);
@@ -93,13 +114,16 @@ export default function ExecuteScreen({
     setExecuting(true);
     setResults(null);
     setSessionExpiring(false);
+    setDestinationNotice(null);
+    destinationNoticeRef.current = null;
     authExpiredRef.current = false;
     completedRef.current = 0;
     setProgress({ current: 0, total: moves.length });
 
     const settings = getSettings();
     try {
-      const dupesRootId = await ensureDedupeRootFolder(settings.dupesFolder);
+      const dupesRoot = await ensureDedupeRootFolder(settings.dupesFolder);
+      recordDestinationResult(dupesRoot);
       const moveResults = await pooledMap(
         moves,
         async (file) => {
@@ -125,11 +149,14 @@ export default function ExecuteScreen({
               return { ok: true, name: file.name, skipped: true };
             }
 
-            const destFolderId = await ensureFolderPath(file.parentChain || [], dupesRootId);
-            await moveFile(file.id, file.parents || [], destFolderId);
+            const destination = await ensureFolderPath(file.parentChain || [], dupesRoot.id);
+            recordDestinationResult(destination);
+            await assertPrivateFolder(destination.id);
+            await moveFile(file.id, file.parents || [], destination.id);
             markCompleted();
             return { ok: true, name: file.name };
           } catch (e) {
+            recordDestinationResult(e);
             if (isAuthExpiredError(e)) {
               authExpiredRef.current = true;
               setSessionExpiring(true);
@@ -148,7 +175,13 @@ export default function ExecuteScreen({
 
       if (authExpiredRef.current) {
         const successCount = moveResults.filter((result) => result.ok && !result.skipped).length;
-        await onAuthExpired?.({ successCount, total: moves.length });
+        await onAuthExpired?.({
+          successCount,
+          total: moves.length,
+          ...(destinationNoticeRef.current
+            ? { destinationNotice: destinationNoticeRef.current }
+            : {}),
+        });
         return;
       }
 
@@ -162,11 +195,22 @@ export default function ExecuteScreen({
       if (failedCount > 0) {
         trackException('execute_partial_failure');
       }
-      await onComplete?.(moveResults);
+      await onComplete?.(moveResults, {
+        ...(destinationNoticeRef.current
+          ? { destinationNotice: destinationNoticeRef.current }
+          : {}),
+      });
     } catch (error) {
+      recordDestinationResult(error);
       if (isAuthExpiredError(error)) {
         setSessionExpiring(true);
-        await onAuthExpired?.({ successCount: 0, total: moves.length });
+        await onAuthExpired?.({
+          successCount: 0,
+          total: moves.length,
+          ...(destinationNoticeRef.current
+            ? { destinationNotice: destinationNoticeRef.current }
+            : {}),
+        });
         return;
       }
       setResults([{ ok: false, name: 'Move setup', error: error.message || 'Move setup failed.' }]);
@@ -184,7 +228,17 @@ export default function ExecuteScreen({
     <div className="screen">
       <div className="setup-title" style={{ marginBottom: 24 }}>Execute</div>
 
-      {moves.length === 0 ? (
+      {destinationNotice && (
+        <div className="account-notice account-notice-info" role="status">
+          {destinationNotice}
+        </div>
+      )}
+
+      {validationError ? (
+        <div className="account-notice account-notice-error" role="alert">
+          {validationError} No Drive changes were made.
+        </div>
+      ) : moves.length === 0 ? (
         <div className="empty-state">No files marked to move.</div>
       ) : (
         <>

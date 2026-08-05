@@ -14,5 +14,14 @@ export function useDecisions() {
     setDecisions({});
   }, []);
 
-  return { decisions, setDecision, clearDecisions };
+  const removeDecisions = useCallback((md5s) => {
+    const removals = new Set(Array.isArray(md5s) ? md5s : [md5s]);
+    setDecisions((current) => {
+      const next = { ...current };
+      removals.forEach((md5) => delete next[md5]);
+      return next;
+    });
+  }, []);
+
+  return { decisions, setDecision, removeDecisions, clearDecisions };
 }

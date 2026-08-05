@@ -2,11 +2,11 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { formatSize, formatDate } from '@/lib/utils';
-import { prefetchPreview } from '@/lib/preview';
-import { countMovableFiles } from '@/lib/decisions';
-import { isAuthExpiredError } from '@/lib/auth';
+import { countMovableFiles, validateDiscardDecision } from '@/lib/decisions';
 import FilePreview from '@/components/FilePreview';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+
+const FILE_PAGE_SIZE = 4;
 
 export default function ReviewScreen({
   dupGroups,
@@ -15,9 +15,11 @@ export default function ReviewScreen({
   onExecute,
   onNoMovesComplete,
   onAuthExpired,
+  workflowError = null,
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedDiscardIds, setSelectedDiscardIds] = useState([]);
+  const [filePageIndex, setFilePageIndex] = useState(0);
 
   // Filter to only show groups that haven't been decided yet
   const pendingGroups = useMemo(() => {
@@ -37,6 +39,19 @@ export default function ReviewScreen({
   const total = dupGroups.length;
   const selectedDiscardIdSet = useMemo(() => new Set(selectedDiscardIds), [selectedDiscardIds]);
   const currentMoveCount = selectedDiscardIds.length;
+  const filePageCount = Math.max(1, Math.ceil((group?.files.length || 0) / FILE_PAGE_SIZE));
+  const firstVisibleFileIndex = filePageIndex * FILE_PAGE_SIZE;
+  const visibleFiles = group?.files.slice(
+    firstVisibleFileIndex,
+    firstVisibleFileIndex + FILE_PAGE_SIZE
+  ) || [];
+  const currentDecisionValidation = useMemo(() => {
+    if (!group) return { valid: false, error: null };
+    return validateDiscardDecision(group, {
+      action: 'discard',
+      discardIds: selectedDiscardIds,
+    });
+  }, [group, selectedDiscardIds]);
   const decidedGroups = useMemo(() => {
     return dupGroups.filter((currentGroup) => {
       const decision = decisions[currentGroup.md5];
@@ -51,10 +66,16 @@ export default function ReviewScreen({
 
   useEffect(() => {
     setSelectedDiscardIds([]);
+    setFilePageIndex(0);
   }, [group?.md5]);
 
-  const handleToggleDiscardByIndex = useCallback((fileIndex) => {
-    if (!group || fileIndex >= group.files.length) return;
+  useEffect(() => {
+    if (filePageIndex >= filePageCount) setFilePageIndex(filePageCount - 1);
+  }, [filePageCount, filePageIndex]);
+
+  const handleToggleDiscardByIndex = useCallback((visibleFileIndex) => {
+    const fileIndex = firstVisibleFileIndex + visibleFileIndex;
+    if (!group || visibleFileIndex < 0 || fileIndex >= group.files.length) return;
     const file = group.files[fileIndex];
     setSelectedDiscardIds((current) => {
       if (current.includes(file.id)) {
@@ -62,15 +83,20 @@ export default function ReviewScreen({
       }
       return [...current, file.id];
     });
-  }, [group]);
+  }, [firstVisibleFileIndex, group]);
 
   const handleConfirmCurrent = useCallback(() => {
-    if (!group) return;
-    onDecision(group.md5, { discardIds: selectedDiscardIds, action: 'discard' });
-  }, [group, onDecision, selectedDiscardIds]);
+    if (!group || !currentDecisionValidation.valid) return;
+    setFilePageIndex(0);
+    onDecision(group.md5, {
+      discardIds: currentDecisionValidation.discardIds,
+      action: 'discard',
+    });
+  }, [currentDecisionValidation, group, onDecision]);
 
   const handleSkipCurrent = useCallback(() => {
     if (!group) return;
+    setFilePageIndex(0);
     onDecision(group.md5, { action: 'skip' });
   }, [group, onDecision]);
 
@@ -81,36 +107,12 @@ export default function ReviewScreen({
 
   useKeyboardShortcuts({
     enabled: Boolean(group),
-    maxIndex: group?.files.length ?? 0,
+    maxIndex: visibleFiles.length,
     onSelectIndex: handleToggleDiscardByIndex,
     onSkipCurrent: handleSkipCurrent,
     onConfirmCurrent: handleConfirmCurrent,
     onExecute: handleExecute,
   });
-
-  // Prefetch previews for upcoming groups (next 2 groups)
-  useEffect(() => {
-    if (!pendingGroups.length) return;
-
-    const PREFETCH_AHEAD = 2;
-    const filesToPrefetch = [];
-
-    for (let i = 1; i <= PREFETCH_AHEAD; i++) {
-      const nextIndex = currentIndex + i;
-      if (nextIndex < pendingGroups.length) {
-        const nextGroup = pendingGroups[nextIndex];
-        filesToPrefetch.push(...nextGroup.files);
-      }
-    }
-
-    filesToPrefetch.forEach((file) => {
-      prefetchPreview(file).catch((error) => {
-        if (isAuthExpiredError(error)) {
-          onAuthExpired?.();
-        }
-      });
-    });
-  }, [currentIndex, onAuthExpired, pendingGroups]);
 
   useEffect(() => {
     if (pendingGroups.length === 0 && dupGroups.length > 0) {
@@ -143,6 +145,11 @@ export default function ReviewScreen({
 
   return (
     <div className="screen">
+      {workflowError && (
+        <div className="account-notice account-notice-error" role="alert">
+          {workflowError}
+        </div>
+      )}
       <div className="review-toolbar">
         <div className="review-nav-label">
           Group {progress + 1} of {total} ({pendingGroups.length} remaining)
@@ -172,11 +179,14 @@ export default function ReviewScreen({
           {group.files.length} files • {formatSize(group.wastedSize)} wasted
         </div>
         <div className="group-hint">
-          Press 1-9 to mark duplicates to discard, Enter or N for next, S to skip, E to execute.
+          Press 1-4 to mark visible duplicates to discard, Enter or N for next, S to skip, E to execute.
         </div>
         <div className="group-selection-summary">
           {selectedDiscardIds.length} selected to discard • {group.files.length - currentMoveCount} will be kept
         </div>
+        {!currentDecisionValidation.valid && currentDecisionValidation.error && (
+          <div className="group-warning" role="alert">{currentDecisionValidation.error}</div>
+        )}
         {group.uncertain && (
           <div className="group-warning">Size mismatch - review carefully</div>
         )}
@@ -186,14 +196,43 @@ export default function ReviewScreen({
         <button
           className="btn btn-primary"
           onClick={handleConfirmCurrent}
+          disabled={!currentDecisionValidation.valid}
           title="Confirm this group and move to next group (Enter or N)"
         >
-          {selectedDiscardIds.length === 0 ? 'Keep All and Next' : 'Discard Selected and Next'}
+          {!currentDecisionValidation.valid
+            ? 'Keep at Least One Copy'
+            : selectedDiscardIds.length === 0
+              ? 'Keep All and Next'
+              : 'Discard Selected and Next'}
+        </button>
+      </div>
+
+      <div className="file-pagination" aria-label="Duplicate file pages">
+        <button
+          className="btn"
+          type="button"
+          onClick={() => setFilePageIndex((page) => Math.max(0, page - 1))}
+          disabled={filePageIndex === 0}
+          aria-label="Previous files"
+        >
+          Previous
+        </button>
+        <span aria-live="polite">
+          Files {firstVisibleFileIndex + 1}–{firstVisibleFileIndex + visibleFiles.length} of {group.files.length}
+        </span>
+        <button
+          className="btn"
+          type="button"
+          onClick={() => setFilePageIndex((page) => Math.min(filePageCount - 1, page + 1))}
+          disabled={filePageIndex >= filePageCount - 1}
+          aria-label="Next files"
+        >
+          Next
         </button>
       </div>
 
       <div className="files-grid">
-        {group.files.map((f, i) => (
+        {visibleFiles.map((f, i) => (
           <div
             key={f.id}
             className={`file-card${selectedDiscardIdSet.has(f.id) ? ' file-discard' : ''}`}
