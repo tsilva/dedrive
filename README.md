@@ -6,7 +6,7 @@
   [Live Demo](https://dedrive.tsilva.eu)
 </div>
 
-dedrive is a browser-based Google Drive duplicate finder built with Next.js. It scans your own Drive files, groups exact matches by checksum, and lets you review each group, mark duplicate copies to discard, or keep everything before making any changes.
+dedrive is a browser-based Google Drive duplicate finder built with Next.js. It scans your own Drive files, groups exact matches by checksum, and lets you choose which copies to keep before making any changes.
 
 The cleanup flow starts with read-only Drive access. If you choose to proceed, dedrive asks for write access only before moving copies you marked as duplicates into a `_dupes` folder.
 
@@ -50,9 +50,10 @@ pnpm start    # serve the production build
 - Scan results and review decisions stay in the active browser tab. Non-sensitive settings use `localStorage`.
 - Google Workspace native files are skipped because they do not expose `md5Checksum`.
 - A scan with no duplicates and a review with no files marked to move both return to the signed-in account screen with a no-change notice. Non-auth scan failures return there with a retry message.
-- During review, select every copy you want to discard, then move to the next group. At least one copy in each duplicate group must remain; confirmation is blocked if every copy is selected. Groups show four files per page, and number keys 1–4 toggle the visible files while selections persist across pages. Enter/N confirms the current group, S skips, and E moves to execution. PDF previews open fullscreen with previous/next page controls and arrow-key navigation.
-- Preview downloads are capped at 10 MB, limited to two concurrent tasks, and cancelled when their page or workflow closes. Oversized files remain available through the Open in Drive link.
-- Scans exclude files shared with the user as well as owned files located beneath a non-owned shared folder. Shared-folder metadata is used only to verify ancestry and is never offered for cleanup.
+- During review, select every copy you want to keep; unselected copies are marked to move. At least one explicit keep choice is required. Groups show four files per page, and number keys 1–4 toggle the visible files while selections persist across pages. Enter/N confirms the current group, S skips, and E moves to execution.
+- The review layout uses the available viewport for one tall comparison row or a 2×2 grid. The next four files stay mounted offscreen so images, text, and first-page PDF canvases are ready as the user advances. PDF previews still offer optional fullscreen, zoom, page controls, and arrow-key navigation.
+- Preview downloads are capped at 10 MB, limited to two concurrent tasks, and cancelled when their page or workflow closes. At most four visible and four prefetched previews are mounted. Oversized files remain available through the Open in Drive link.
+- Drive requests exclude the user's Shared with me collection and shared-drive items, and response processing retains only `ownedByMe` files. Owned files whose complete owned ancestry cannot be resolved to the My Drive root are also excluded, while files the user owns and has shared outward remain eligible.
 - Duplicates are moved only into a freshly verified, user-owned, unshared `_dupes` destination. If an existing marked or same-named cleanup folder is shared, dedrive leaves it unchanged, creates a private replacement, and reports that choice. Every app-marked cleanup root is ignored on future scans, and files are never permanently deleted. Mirrored folder ancestry is keyed by private Drive app properties and source folder IDs, so exact names—including whitespace and `/` characters—and same-named sibling folders remain distinct.
 - Drive retries are reason-aware: rate limits and safe read failures are retried, folder creation uses pre-generated IDs, and ambiguous file moves are reconciled against current parent metadata before retrying.
 

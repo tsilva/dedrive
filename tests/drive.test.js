@@ -359,11 +359,12 @@ describe('Drive request safety', () => {
     expect(fetch.mock.calls[0][0]).toContain('/files/root?fields=id');
   });
 
-  it('retains shared folders for ancestry without retaining shared files', async () => {
+  it('requests only non-Shared-with-me Drive items and retains only owned responses', async () => {
     const onProgress = vi.fn();
     fetch.mockResolvedValueOnce(jsonResponse({
       files: [
         { id: 'owned-file', name: 'owned.txt', ownedByMe: true, mimeType: 'text/plain' },
+        { id: 'owned-shared-outward', name: 'shared-out.txt', ownedByMe: true, shared: true, mimeType: 'text/plain' },
         { id: 'shared-folder', name: 'Shared', ownedByMe: false, mimeType: 'application/vnd.google-apps.folder' },
         { id: 'shared-file', name: 'shared.txt', ownedByMe: false, mimeType: 'text/plain' },
       ],
@@ -371,9 +372,16 @@ describe('Drive request safety', () => {
 
     await expect(fetchAllFiles(onProgress)).resolves.toEqual([
       expect.objectContaining({ id: 'owned-file' }),
-      expect.objectContaining({ id: 'shared-folder' }),
+      expect.objectContaining({ id: 'owned-shared-outward' }),
     ]);
-    expect(onProgress).toHaveBeenCalledWith({ page: 1, fileCount: 1 });
+    expect(onProgress).toHaveBeenCalledWith({ page: 1, fileCount: 2 });
+
+    const requestUrl = new URL(fetch.mock.calls[0][0]);
+    expect(requestUrl.searchParams.get('q')).toBe('trashed = false and sharedWithMe = false');
+    expect(requestUrl.searchParams.get('spaces')).toBe('drive');
+    expect(requestUrl.searchParams.get('corpora')).toBe('user');
+    expect(requestUrl.searchParams.get('includeItemsFromAllDrives')).toBe('false');
+    expect(requestUrl.searchParams.get('supportsAllDrives')).toBe('false');
   });
 
   it('reconciles an ambiguous move before deciding whether to retry', async () => {
