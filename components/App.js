@@ -319,7 +319,7 @@ export default function App({ clientId = CLIENT_ID }) {
         strategy="afterInteractive"
       />
       <Header screen={screen} user={user} />
-      <main className="main">
+      <main className={`main${screen === 'review' ? ' main-review' : ''}`}>
         {screen === 'account' && (
           <AccountScreen
             error={authInitError || authError}
