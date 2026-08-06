@@ -359,7 +359,7 @@ describe('Drive request safety', () => {
     expect(fetch.mock.calls[0][0]).toContain('/files/root?fields=id');
   });
 
-  it('requests only non-Shared-with-me Drive items and retains only owned responses', async () => {
+  it('uses a compatible Drive query and retains only owned responses', async () => {
     const onProgress = vi.fn();
     fetch.mockResolvedValueOnce(jsonResponse({
       files: [
@@ -377,7 +377,7 @@ describe('Drive request safety', () => {
     expect(onProgress).toHaveBeenCalledWith({ page: 1, fileCount: 2 });
 
     const requestUrl = new URL(fetch.mock.calls[0][0]);
-    expect(requestUrl.searchParams.get('q')).toBe('trashed = false and sharedWithMe = false');
+    expect(requestUrl.searchParams.get('q')).toBe('trashed = false');
     expect(requestUrl.searchParams.get('spaces')).toBe('drive');
     expect(requestUrl.searchParams.get('corpora')).toBe('user');
     expect(requestUrl.searchParams.get('includeItemsFromAllDrives')).toBe('false');
