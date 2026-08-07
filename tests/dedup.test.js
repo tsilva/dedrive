@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { excludeDedupeFolderFiles, filterOwnedMyDriveTree, resolvePaths } from '@/lib/dedup';
+import {
+  excludeDedupeFolderFiles,
+  filterOwnedMyDriveTree,
+  findDuplicates,
+  resolvePaths,
+} from '@/lib/dedup';
 
 const FOLDER = 'application/vnd.google-apps.folder';
 
@@ -104,5 +109,41 @@ describe('structured Drive ancestry', () => {
     ];
 
     expect(filterOwnedMyDriveTree(files, 'root-id').map((file) => file.id)).toEqual(['owned-folder']);
+  });
+});
+
+describe('duplicate review ordering', () => {
+  it('sorts files and groups by natural source path with stable ID tie-breakers', () => {
+    const files = [
+      { id: 'report-zeta', md5Checksum: 'report', name: 'report.pdf', path: '/Projects/Zeta/report.pdf', size: '10' },
+      { id: 'notes-10', md5Checksum: 'notes', name: 'notes.txt', path: '/Projects/10/notes.txt', size: '5' },
+      { id: 'report-alpha-b', md5Checksum: 'report', name: 'report.pdf', path: '/Projects/Alpha/report.pdf', size: '10' },
+      { id: 'archive-b', md5Checksum: 'archive', name: 'copy.txt', path: '/Archive/copy.txt', size: '2' },
+      { id: 'notes-2', md5Checksum: 'notes', name: 'notes.txt', path: '/Projects/2/notes.txt', size: '5' },
+      { id: 'archive-a', md5Checksum: 'archive', name: 'copy.txt', path: '/Archive/copy.txt', size: '2' },
+      { id: 'report-alpha-a', md5Checksum: 'report', name: 'report.pdf', path: '/projects/alpha/report.pdf', size: '10' },
+    ];
+    const groups = findDuplicates(files);
+    const reverseScanGroups = findDuplicates([...files].reverse());
+    const summarizeOrder = (orderedGroups) => orderedGroups.map((group) => ({
+      md5: group.md5,
+      fileIds: group.files.map((file) => file.id),
+    }));
+
+    expect(summarizeOrder(reverseScanGroups)).toEqual(summarizeOrder(groups));
+    expect(groups.map((group) => group.md5)).toEqual(['archive', 'notes', 'report']);
+    expect(groups.find((group) => group.md5 === 'archive').files.map((file) => file.id)).toEqual([
+      'archive-a',
+      'archive-b',
+    ]);
+    expect(groups.find((group) => group.md5 === 'notes').files.map((file) => file.id)).toEqual([
+      'notes-2',
+      'notes-10',
+    ]);
+    expect(groups.find((group) => group.md5 === 'report').files.map((file) => file.id)).toEqual([
+      'report-alpha-b',
+      'report-alpha-a',
+      'report-zeta',
+    ]);
   });
 });
