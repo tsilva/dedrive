@@ -54,7 +54,10 @@ export default function PdfPreview({
       ).toString();
 
       const arrayBuffer = await blob.arrayBuffer();
-      loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      loadingTask = pdfjsLib.getDocument({
+        data: arrayBuffer,
+        isEvalSupported: false,
+      });
       const pdf = await loadingTask.promise;
       loadedPdf = pdf;
 
