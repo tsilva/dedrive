@@ -14,7 +14,7 @@
   },
   "pnpm": {
     "overrides": {
-      "postcss": "8.5.10"
+      "postcss": "8.5.23"
     }
   },
   "repository": {
@@ -31,9 +31,9 @@
   "dependencies": {
     "@vercel/analytics": "^1.6.1",
     "next": "^16.3.0",
-    "pdfjs-dist": "^5.5.207",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "pdfjs-dist": "^6.2.108",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^7.0.0",
