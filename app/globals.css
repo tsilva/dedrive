@@ -526,6 +526,96 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   line-height: 1.5;
 }
 
+/* Excluded path prefixes */
+.path-filters {
+  width: 100%;
+  padding: 16px;
+  margin-bottom: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: left;
+}
+
+.path-filters-title {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.path-filters-desc {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.prefix-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  margin: 0 0 12px;
+}
+
+.prefix-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 12px;
+}
+
+.prefix-chip code {
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.prefix-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.prefix-remove:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.prefix-form {
+  display: flex;
+  gap: 8px;
+}
+
+.prefix-form .input { flex: 1; }
+
+.prefix-form .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.prefix-error {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--accent-danger);
+}
+
 .btn-large {
   padding: 12px 28px;
   font-size: 15px;

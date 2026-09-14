@@ -21,6 +21,7 @@ import {
 } from '@/lib/auth';
 import { clearFolderCache, getDriveRootId, getUserInfo, fetchAllFiles } from '@/lib/drive';
 import {
+  excludeBlacklistedPathFiles,
   excludeDedupeFolderFiles,
   filterOwnedMyDriveTree,
   findDuplicates,
@@ -29,7 +30,7 @@ import {
 } from '@/lib/dedup';
 import { clearPreviewCache } from '@/lib/preview';
 import { countMovableFiles, validateDiscardDecision } from '@/lib/decisions';
-import { getSettings, purgeAppBrowserData } from '@/lib/state';
+import { getSettings, saveSettings, purgeAppBrowserData } from '@/lib/state';
 import { trackEvent, trackException } from '@/lib/analytics';
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
@@ -57,6 +58,9 @@ export default function App({ clientId = CLIENT_ID }) {
   const [reviewError, setReviewError] = useState(null);
   const { decisions, setDecision, removeDecisions, clearDecisions } = useDecisions();
   const [dupGroups, setDupGroups] = useState([]);
+  const [blacklistedPrefixes, setBlacklistedPrefixes] = useState(
+    () => getSettings().blacklistedPathPrefixes
+  );
   const authExpiryHandledRef = useRef(false);
 
   const stats = dupGroups.length > 0 ? computeStats(dupGroups) : null;
@@ -157,6 +161,20 @@ export default function App({ clientId = CLIENT_ID }) {
     setScreen('account');
   }, [clearWorkflowState]);
 
+  const handleAddBlacklistedPrefix = useCallback((prefix) => {
+    if (!prefix || blacklistedPrefixes.includes(prefix)) return;
+    const next = [...blacklistedPrefixes, prefix];
+    setBlacklistedPrefixes(next);
+    saveSettings({ blacklistedPathPrefixes: next });
+  }, [blacklistedPrefixes]);
+
+  const handleRemoveBlacklistedPrefix = useCallback((prefix) => {
+    const next = blacklistedPrefixes.filter((item) => item !== prefix);
+    if (next.length === blacklistedPrefixes.length) return;
+    setBlacklistedPrefixes(next);
+    saveSettings({ blacklistedPathPrefixes: next });
+  }, [blacklistedPrefixes]);
+
   const handleStartScan = useCallback(async () => {
     trackEvent('scan_started');
     clearWorkflowState();
@@ -178,12 +196,15 @@ export default function App({ clientId = CLIENT_ID }) {
 
       const settings = getSettings();
       const ownedTreeFiles = filterOwnedMyDriveTree(allFiles, rootId);
-      const scannedFiles = excludeDedupeFolderFiles(resolvePaths(ownedTreeFiles), settings.dupesFolder);
+      const resolvedFiles = excludeDedupeFolderFiles(resolvePaths(ownedTreeFiles), settings.dupesFolder);
+      const scannedFiles = excludeBlacklistedPathFiles(resolvedFiles, settings.blacklistedPathPrefixes);
+      const blacklistedCount = resolvedFiles.length - scannedFiles.length;
       const groups = findDuplicates(scannedFiles);
       const scanStats = computeStats(groups);
       setDupGroups(groups);
       trackEvent('scan_completed', {
         file_count: scannedFiles.length,
+        blacklisted_file_count: blacklistedCount,
         duplicate_group_count: scanStats.totalGroups,
         duplicate_file_count: scanStats.totalFiles,
         uncertain_group_count: scanStats.uncertainCount,
@@ -327,9 +348,12 @@ export default function App({ clientId = CLIENT_ID }) {
             completionNotice={completionNotice}
             user={user}
             signInStatus={authInitStatus}
+            blacklistedPrefixes={blacklistedPrefixes}
             onSignIn={handleSignIn}
             onSignOut={handleSignOut}
             onStartScan={handleStartScan}
+            onAddBlacklistedPrefix={handleAddBlacklistedPrefix}
+            onRemoveBlacklistedPrefix={handleRemoveBlacklistedPrefix}
           />
         )}
         {screen === 'scan' && (

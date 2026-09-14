@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
+import { normalizePathPrefix } from '@/lib/dedup';
 
 export default function AccountScreen({
   error,
@@ -10,14 +12,37 @@ export default function AccountScreen({
   onSignIn,
   onSignOut,
   onStartScan,
+  blacklistedPrefixes = [],
+  onAddBlacklistedPrefix,
+  onRemoveBlacklistedPrefix,
   signInHref = null,
   signInLabel = 'Sign in with Google',
   signInHelper = null,
   signInVariant = 'google',
   signInStatus = 'ready',
 }) {
+  const [prefixDraft, setPrefixDraft] = useState('');
+  const [prefixError, setPrefixError] = useState(null);
   const isGoogleSignIn = signInVariant === 'google';
   const signInClassName = isGoogleSignIn ? 'btn-google' : 'btn btn-start btn-large';
+  const handleAddPrefix = (event) => {
+    event.preventDefault();
+    const normalized = normalizePathPrefix(prefixDraft);
+
+    if (!normalized) {
+      setPrefixError('Enter a folder path such as /Archive/2020.');
+      return;
+    }
+    if (blacklistedPrefixes.includes(normalized)) {
+      setPrefixError('That path prefix is already excluded.');
+      return;
+    }
+
+    onAddBlacklistedPrefix?.(normalized);
+    setPrefixDraft('');
+    setPrefixError(null);
+  };
+
   const signInDisabled = !signInHref && signInStatus !== 'ready';
   const resolvedSignInLabel = signInStatus === 'loading'
     ? 'Loading Google sign-in...'
@@ -130,6 +155,48 @@ export default function AccountScreen({
               <div className="user-name">{user.displayName}</div>
               <div className="user-email">{user.emailAddress}</div>
             </div>
+          </div>
+        )}
+
+        {user && (
+          <div className="path-filters">
+            <div className="path-filters-title">Skip scanning these paths</div>
+            <p className="account-helper path-filters-desc">
+              Files whose Drive path starts with an excluded prefix are left out of scans.
+              Matching ignores case and covers child folders automatically.
+            </p>
+            {blacklistedPrefixes.length > 0 && (
+              <ul className="prefix-list">
+                {blacklistedPrefixes.map((prefix) => (
+                  <li key={prefix} className="prefix-chip">
+                    <code>{prefix}</code>
+                    <button
+                      type="button"
+                      className="prefix-remove"
+                      aria-label={`Remove excluded path ${prefix}`}
+                      onClick={() => onRemoveBlacklistedPrefix?.(prefix)}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form className="prefix-form" onSubmit={handleAddPrefix}>
+              <input
+                className="input"
+                type="text"
+                value={prefixDraft}
+                onChange={(event) => {
+                  setPrefixDraft(event.target.value);
+                  setPrefixError(null);
+                }}
+                placeholder="/Archive/2020"
+                aria-label="Path prefix to exclude from scans"
+              />
+              <button className="btn" type="submit">Add</button>
+            </form>
+            {prefixError && <div className="prefix-error" role="alert">{prefixError}</div>}
           </div>
         )}
 

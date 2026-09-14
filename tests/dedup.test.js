@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  excludeBlacklistedPathFiles,
   excludeDedupeFolderFiles,
   filterOwnedMyDriveTree,
   findDuplicates,
+  normalizePathPrefix,
   resolvePaths,
 } from '@/lib/dedup';
 
@@ -109,6 +111,53 @@ describe('structured Drive ancestry', () => {
     ];
 
     expect(filterOwnedMyDriveTree(files, 'root-id').map((file) => file.id)).toEqual(['owned-folder']);
+  });
+});
+
+describe('blacklisted path prefixes', () => {
+  it('normalizes user-entered prefixes', () => {
+    expect(normalizePathPrefix('  /Archive/2020/  ')).toBe('/Archive/2020');
+    expect(normalizePathPrefix('Archive')).toBe('/Archive');
+    expect(normalizePathPrefix('/Archive/*')).toBe('/Archive');
+    expect(normalizePathPrefix('/')).toBe('');
+    expect(normalizePathPrefix('   ')).toBe('');
+    expect(normalizePathPrefix(null)).toBe('');
+  });
+
+  it('excludes exact prefixes and descendants without matching sibling name prefixes', () => {
+    const files = [
+      { id: 'archive', path: '/Archive', name: 'Archive' },
+      { id: 'archive-file', path: '/Archive/report.pdf', name: 'report.pdf' },
+      { id: 'archive-2026', path: '/Archive2026/report.pdf', name: 'report.pdf' },
+      { id: 'photos', path: '/Photos/Backup/img.jpg', name: 'img.jpg' },
+      { id: 'keep', path: '/Keep/report.pdf', name: 'report.pdf' },
+    ];
+
+    const visible = excludeBlacklistedPathFiles(files, ['/archive', '/Photos/Backup']);
+    expect(visible.map((file) => file.id)).toEqual(['archive-2026', 'keep']);
+    expect(files.find((file) => file.id === 'archive-file').pathBlacklisted).toBe(true);
+    expect(files.find((file) => file.id === 'archive').pathBlacklisted).toBe(true);
+    expect(files.find((file) => file.id === 'archive-2026').pathBlacklisted).toBe(false);
+  });
+
+  it('ignores empty and duplicate prefixes', () => {
+    const files = [
+      { id: 'a', path: '/A/file.txt', name: 'file.txt' },
+      { id: 'b', path: '/B/file.txt', name: 'file.txt' },
+    ];
+
+    const visible = excludeBlacklistedPathFiles(files, ['', '/', 'A', 'a']);
+    expect(visible.map((file) => file.id)).toEqual(['b']);
+  });
+
+  it('keeps every file when no prefixes are configured', () => {
+    const files = [
+      { id: 'a', path: '/A/file.txt', name: 'file.txt' },
+      { id: 'b', path: '/B/file.txt', name: 'file.txt' },
+    ];
+
+    expect(excludeBlacklistedPathFiles(files, []).map((file) => file.id)).toEqual(['a', 'b']);
+    expect(excludeBlacklistedPathFiles(files, undefined).map((file) => file.id)).toEqual(['a', 'b']);
   });
 });
 
