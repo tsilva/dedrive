@@ -37,7 +37,7 @@ Next.js 16 app (App Router, JavaScript, no TypeScript) that finds and manages du
 
 - **auth.js** — Google Identity Services (GIS) token client wrapper. Uses implicit grant flow (access tokens, not ID tokens). Token stored in module-level variable.
 - **drive.js** — Google Drive REST API v3 client. Handles pagination, reason-aware retries, idempotent folder creation, and parent reconciliation after ambiguous moves. A 401 invalidates auth instead of refreshing in the background.
-- **dedup.js** — Groups files by `md5Checksum`, resolves exact structured ancestry plus display paths, identifies the managed `_dupes` root, and computes wasted-space stats. Skips Google Workspace native types (Docs, Sheets, etc.) since they have no md5.
+- **dedup.js** — Groups files by `md5Checksum`, resolves exact structured ancestry plus display paths, identifies the managed `_dupes` root, excludes user-blacklisted path prefixes, and computes wasted-space stats. Skips Google Workspace native types (Docs, Sheets, etc.) since they have no md5.
 - **preview.js** — Lazy file preview with in-memory cache. Supports images (thumbnail or download), PDFs (via pdfjs-dist), and text files (first 5KB). `clearPreviewCache()` revokes blob URLs on sign-out.
 - **state.js** — Reads non-sensitive settings from `localStorage` and purges app-owned browser storage after execution. Scan results and review decisions remain in active-tab memory.
 

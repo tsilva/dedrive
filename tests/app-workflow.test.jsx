@@ -7,11 +7,15 @@ const mocks = vi.hoisted(() => ({
   ensureWriteAccess: vi.fn(),
   fetchAllFiles: vi.fn(),
   getDriveRootId: vi.fn(),
+  getSettings: vi.fn(),
   getUserInfo: vi.fn(),
   initAuth: vi.fn(),
   requestReadAccess: vi.fn(),
   requestWriteAccess: vi.fn(),
+  saveSettings: vi.fn(),
 }));
+
+const FOLDER = 'application/vnd.google-apps.folder';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/app',
@@ -76,7 +80,8 @@ vi.mock('@/lib/drive', () => ({
 }));
 vi.mock('@/lib/preview', () => ({ clearPreviewCache: vi.fn() }));
 vi.mock('@/lib/state', () => ({
-  getSettings: () => ({ dupesFolder: '_dupes', batchSize: 10 }),
+  getSettings: mocks.getSettings,
+  saveSettings: mocks.saveSettings,
   purgeAppBrowserData: vi.fn(() => Promise.resolve()),
 }));
 vi.mock('@/lib/analytics', () => ({
@@ -101,6 +106,11 @@ describe('top-level scan outcomes', () => {
       emailAddress: 'drive@example.com',
     });
     mocks.getDriveRootId.mockResolvedValue('root-id');
+    mocks.getSettings.mockReturnValue({
+      dupesFolder: '_dupes',
+      batchSize: 10,
+      blacklistedPathPrefixes: [],
+    });
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -198,5 +208,54 @@ describe('top-level scan outcomes', () => {
 
     await waitFor(() => expect(screen.getByText('Decision count: 0')).toBeInTheDocument());
     expect(screen.getByRole('alert')).toHaveTextContent(/unsafe or stale selection/i);
+  });
+
+  it('persists blacklisted path prefixes added before a scan', async () => {
+    render(<App clientId="test-client-id" />);
+    fireEvent.click(screen.getByTestId('gsi-load'));
+    fireEvent.click(screen.getByRole('button', { name: /sign in with google/i }));
+
+    const input = await screen.findByLabelText(/path prefix to exclude from scans/i);
+    fireEvent.change(input, { target: { value: '/Archive/' } });
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    expect(screen.getByText('/Archive')).toBeInTheDocument();
+    expect(mocks.saveSettings).toHaveBeenCalledWith({
+      blacklistedPathPrefixes: ['/Archive'],
+    });
+  });
+
+  it('excludes files under blacklisted path prefixes from the scan', async () => {
+    mocks.getSettings.mockReturnValue({
+      dupesFolder: '_dupes',
+      batchSize: 10,
+      blacklistedPathPrefixes: ['/Archive'],
+    });
+    mocks.fetchAllFiles.mockResolvedValue([
+      { id: 'archive-folder', name: 'Archive', mimeType: FOLDER, ownedByMe: true, parents: ['root-id'] },
+      {
+        id: 'archived-copy',
+        name: 'copy.txt',
+        size: '10',
+        md5Checksum: 'checksum',
+        mimeType: 'text/plain',
+        ownedByMe: true,
+        parents: ['archive-folder'],
+      },
+      {
+        id: 'kept-copy',
+        name: 'copy.txt',
+        size: '10',
+        md5Checksum: 'checksum',
+        mimeType: 'text/plain',
+        ownedByMe: true,
+        parents: ['root-id'],
+      },
+    ]);
+    render(<App clientId="test-client-id" />);
+
+    await signInAndStartScan();
+
+    expect(await screen.findByText('No duplicates found. Your Drive was left unchanged.')).toBeInTheDocument();
   });
 });
