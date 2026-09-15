@@ -114,6 +114,44 @@ describe('top-level scan outcomes', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
+  it.each([
+    [0, true, false],
+    [1023, true, false],
+    [1024, true, true],
+    [1025, true, true],
+    [1023, false, true],
+  ])('scans size %i with ignoreSmallFiles=%s, duplicates=%s', async (size, enabled, hasDuplicates) => {
+    mocks.fetchAllFiles.mockResolvedValue(['a', 'b'].map((id) => ({
+      id,
+      name: `${id}.txt`,
+      mimeType: 'text/plain',
+      size: String(size),
+      md5Checksum: 'same-checksum',
+      ownedByMe: true,
+      parents: ['root-id'],
+    })));
+    render(<App clientId="test-client-id" />);
+    const toggle = screen.getByRole('checkbox', { name: /ignore files smaller than 1 KB/i });
+    expect(toggle).toBeChecked();
+    if (!enabled) {
+      fireEvent.click(toggle);
+      expect(toggle).not.toBeChecked();
+      expect(mocks.saveSettings).toHaveBeenCalledWith({ ignoreSmallFiles: false });
+    }
+    await signInAndStartScan();
+    if (hasDuplicates) {
+      expect(await screen.findByText('Decision count: 0')).toBeInTheDocument();
+    } else {
+      expect(await screen.findByText('No duplicates found. Your Drive was left unchanged.')).toBeInTheDocument();
+    }
+  });
+
+  it('restores a disabled small-file filter from settings', () => {
+    mocks.getSettings.mockReturnValue({ blacklistedPathPrefixes: [], ignoreSmallFiles: false });
+    render(<App clientId="test-client-id" />);
+    expect(screen.getByRole('checkbox', { name: /ignore files smaller than 1 KB/i })).not.toBeChecked();
+  });
+
   it('returns a signed-in user to Account with a success notice after a zero-result scan', async () => {
     mocks.fetchAllFiles.mockResolvedValue([]);
     render(<App clientId="test-client-id" />);
@@ -182,7 +220,7 @@ describe('top-level scan outcomes', () => {
       {
         id: 'first',
         name: 'copy.txt',
-        size: '10',
+        size: '2048',
         md5Checksum: 'checksum',
         mimeType: 'text/plain',
         ownedByMe: true,
@@ -191,7 +229,7 @@ describe('top-level scan outcomes', () => {
       {
         id: 'second',
         name: 'copy.txt',
-        size: '10',
+        size: '2048',
         md5Checksum: 'checksum',
         mimeType: 'text/plain',
         ownedByMe: true,
@@ -236,7 +274,7 @@ describe('top-level scan outcomes', () => {
       {
         id: 'archived-copy',
         name: 'copy.txt',
-        size: '10',
+        size: '2048',
         md5Checksum: 'checksum',
         mimeType: 'text/plain',
         ownedByMe: true,
@@ -245,7 +283,7 @@ describe('top-level scan outcomes', () => {
       {
         id: 'kept-copy',
         name: 'copy.txt',
-        size: '10',
+        size: '2048',
         md5Checksum: 'checksum',
         mimeType: 'text/plain',
         ownedByMe: true,

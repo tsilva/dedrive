@@ -61,6 +61,7 @@ export default function App({ clientId = CLIENT_ID }) {
   const [blacklistedPrefixes, setBlacklistedPrefixes] = useState(
     () => getSettings().blacklistedPathPrefixes
   );
+  const [ignoreSmallFiles, setIgnoreSmallFiles] = useState(() => getSettings().ignoreSmallFiles ?? true);
   const authExpiryHandledRef = useRef(false);
 
   const stats = dupGroups.length > 0 ? computeStats(dupGroups) : null;
@@ -175,6 +176,11 @@ export default function App({ clientId = CLIENT_ID }) {
     saveSettings({ blacklistedPathPrefixes: next });
   }, [blacklistedPrefixes]);
 
+  const handleIgnoreSmallFilesChange = useCallback((enabled) => {
+    setIgnoreSmallFiles(enabled);
+    saveSettings({ ignoreSmallFiles: enabled });
+  }, []);
+
   const handleStartScan = useCallback(async () => {
     trackEvent('scan_started');
     clearWorkflowState();
@@ -197,8 +203,11 @@ export default function App({ clientId = CLIENT_ID }) {
       const settings = getSettings();
       const ownedTreeFiles = filterOwnedMyDriveTree(allFiles, rootId);
       const resolvedFiles = excludeDedupeFolderFiles(resolvePaths(ownedTreeFiles), settings.dupesFolder);
-      const scannedFiles = excludeBlacklistedPathFiles(resolvedFiles, settings.blacklistedPathPrefixes);
-      const blacklistedCount = resolvedFiles.length - scannedFiles.length;
+      const pathFilteredFiles = excludeBlacklistedPathFiles(resolvedFiles, settings.blacklistedPathPrefixes);
+      const blacklistedCount = resolvedFiles.length - pathFilteredFiles.length;
+      const scannedFiles = ignoreSmallFiles
+        ? pathFilteredFiles.filter((file) => file.size == null || !(Number(file.size) < 1024))
+        : pathFilteredFiles;
       const groups = findDuplicates(scannedFiles);
       const scanStats = computeStats(groups);
       setDupGroups(groups);
@@ -234,7 +243,7 @@ export default function App({ clientId = CLIENT_ID }) {
       setAuthError(`Scan failed: ${e.message || 'Unknown error'}. You can try again.`);
       setScreen('account');
     }
-  }, [clearWorkflowState, handleAuthExpired]);
+  }, [clearWorkflowState, handleAuthExpired, ignoreSmallFiles]);
 
   const handleNoMovesComplete = useCallback(() => {
     clearWorkflowState();
@@ -310,6 +319,7 @@ export default function App({ clientId = CLIENT_ID }) {
 
     signOut();
     await purgeAppBrowserData();
+    setIgnoreSmallFiles(getSettings().ignoreSmallFiles ?? true);
     clearWorkflowState();
     setUser(null);
     setCanWrite(false);
@@ -348,6 +358,8 @@ export default function App({ clientId = CLIENT_ID }) {
             completionNotice={completionNotice}
             user={user}
             signInStatus={authInitStatus}
+            ignoreSmallFiles={ignoreSmallFiles}
+            onIgnoreSmallFilesChange={handleIgnoreSmallFilesChange}
             blacklistedPrefixes={blacklistedPrefixes}
             onSignIn={handleSignIn}
             onSignOut={handleSignOut}
