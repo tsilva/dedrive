@@ -1545,3 +1545,10 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
     justify-content: center;
   }
 }
+
+.small-files-setting {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  cursor: pointer;
+}

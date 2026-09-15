@@ -12,6 +12,8 @@ export default function AccountScreen({
   onSignIn,
   onSignOut,
   onStartScan,
+  ignoreSmallFiles = true,
+  onIgnoreSmallFilesChange,
   blacklistedPrefixes = [],
   onAddBlacklistedPrefix,
   onRemoveBlacklistedPrefix,
@@ -157,6 +159,21 @@ export default function AccountScreen({
             </div>
           </div>
         )}
+
+        <div className="path-filters">
+          <label className="small-files-setting">
+            <input
+              type="checkbox"
+              checked={ignoreSmallFiles}
+              onChange={(event) => onIgnoreSmallFilesChange?.(event.target.checked)}
+              aria-describedby="small-files-help"
+            />
+            Ignore files smaller than 1 KB
+          </label>
+          <p id="small-files-help" className="account-helper path-filters-desc">
+            Skip files under 1,024 bytes when finding duplicates.
+          </p>
+        </div>
 
         {user && (
           <div className="path-filters">
