@@ -13,6 +13,7 @@ import {
   initAuth,
   invalidateAuth,
   isAuthExpiredError,
+  isSignedIn,
   ensureReadAccess,
   ensureWriteAccess,
   requestReadAccess,
@@ -48,7 +49,7 @@ export default function App({ clientId = CLIENT_ID }) {
     clientId ? null : 'Google sign-in is unavailable because the OAuth client ID is not configured.'
   );
   const [user, setUser] = useState(null);
-  const [authNotice, setAuthNotice] = useState(null);
+  const [loadingUser, setLoadingUser] = useState(() => isSignedIn());
   const [completionNotice, setCompletionNotice] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [canWrite, setCanWrite] = useState(false);
@@ -85,7 +86,6 @@ export default function App({ clientId = CLIENT_ID }) {
     clearWorkflowState();
     setUser(null);
     setCanWrite(false);
-    setAuthNotice(null);
     setCompletionNotice(null);
 
     const destinationCopy = details.destinationNotice ? ` ${details.destinationNotice}` : '';
@@ -127,7 +127,6 @@ export default function App({ clientId = CLIENT_ID }) {
     }
 
     trackEvent('sign_in_started');
-    setAuthNotice(null);
     setCompletionNotice(null);
     setAuthError(null);
 
@@ -156,7 +155,6 @@ export default function App({ clientId = CLIENT_ID }) {
     authExpiryHandledRef.current = false;
     setUser(null);
     setCanWrite(false);
-    setAuthNotice(null);
     setCompletionNotice(null);
     setAuthError(null);
     setScreen('account');
@@ -184,7 +182,6 @@ export default function App({ clientId = CLIENT_ID }) {
   const handleStartScan = useCallback(async () => {
     trackEvent('scan_started');
     clearWorkflowState();
-    setAuthNotice(null);
     setCompletionNotice(null);
     setAuthError(null);
     setScreen('scan');
@@ -247,7 +244,6 @@ export default function App({ clientId = CLIENT_ID }) {
 
   const handleNoMovesComplete = useCallback(() => {
     clearWorkflowState();
-    setAuthNotice(null);
     setAuthError(null);
     setCompletionNotice('Review complete. No files were marked to move.');
     setScreen('account');
@@ -323,7 +319,6 @@ export default function App({ clientId = CLIENT_ID }) {
     clearWorkflowState();
     setUser(null);
     setCanWrite(false);
-    setAuthNotice(null);
     const destinationCopy = details.destinationNotice ? ` ${details.destinationNotice}` : '';
     setCompletionNotice(
       `${successCount} ${fileLabel} deduped.${failureCopy} App auth and local data were purged.${destinationCopy}`
@@ -333,28 +328,45 @@ export default function App({ clientId = CLIENT_ID }) {
   }, [clearWorkflowState]);
 
   useEffect(() => {
+    if (!isSignedIn()) return;
+    let cancelled = false;
+    setLoadingUser(true);
+    getUserInfo().then((nextUser) => {
+      if (cancelled) return;
+      setUser(nextUser);
+      setCanWrite(hasWriteAccess());
+    }).catch((error) => {
+      if (cancelled) return;
+      signOut();
+      setAuthError(error.message || 'Could not load your Google account. Sign in again.');
+    }).finally(() => {
+      if (!cancelled) setLoadingUser(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
     if (searchParams.get('start') !== 'signin') return;
     if (user || screen !== 'account') return;
 
     router.replace(pathname);
     setAuthError(null);
-    setAuthNotice('You are now on the secure app. Click Sign in with Google to continue.');
   }, [pathname, router, screen, searchParams, user]);
 
   return (
     <div className="app">
       <Script
         src="https://accounts.google.com/gsi/client"
-        onLoad={handleGsiLoad}
+        onReady={handleGsiLoad}
         onError={handleGsiError}
         strategy="afterInteractive"
       />
-      <Header screen={screen} user={user} />
+      <Header screen={screen} user={user} showWorkflow={Boolean(user) || screen !== 'account'} />
       <main className={`main${screen === 'review' ? ' main-review' : ''}`}>
-        {screen === 'account' && (
+        {loadingUser && <div className="account-container" role="status">Loading your Google account…</div>}
+        {screen === 'account' && !loadingUser && (
           <AccountScreen
             error={authInitError || authError}
-            notice={authNotice}
             completionNotice={completionNotice}
             user={user}
             signInStatus={authInitStatus}
