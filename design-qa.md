@@ -4,6 +4,14 @@ Date: 2026-10-01
 
 final result: passed
 
+## Laptop density adjustment
+
+The user requested a smaller version of the same design, with the main content mostly above the fold on a MacBook. This supersedes the original mockup's typography and spacing scale. Content width is capped at 1160px, the headline at 72px, and the workflow heading at 38px. Short desktop viewports use tighter spacing and a 32px workflow heading. The three-column preview remains available down to 1101px; mobile still stacks its regions.
+
+At a 1440 × 800 CSS viewport, the local page height decreased from 1154px to 852px (26%). The full hero, workflow tabs, photo preview, and safety note fit in the first viewport, ending at y748 even with the local OAuth configuration error visible. Footer details require a small scroll. At 1280 × 720 the full photo preview remains visible; the safety note extends slightly below the fold in the configuration-error state. Mobile was inspected at 390 × 844 with no horizontal overflow or clipped content. Production build and whitespace checks pass; this update only changes CSS.
+
+Final viewport screenshot: `/Users/tsilva/.codex/visualizations/2026/10/01/01a0f699-f472-7e33-84e0-d0fa6aef9688/home-compact-laptop.png`.
+
 ## Comparison target and evidence
 
 - Source visual truth: `/Users/tsilva/.codex/generated_images/01a0f699-f472-7e33-84e0-d0fa6aef9688/exec-119dfcd2-bc9b-4ea5-bca6-444cd27321e2.png` (third displayed ideation result).
