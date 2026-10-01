@@ -359,86 +359,17 @@ code, .mono { font-family: var(--mono); font-size: 0.85em; }
   margin-bottom: 40px;
 }
 
-.account-logo {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 20px;
-  color: var(--accent);
-}
-
-.account-logo svg {
-  width: 100%;
-  height: 100%;
-}
-
-.account-title {
-  font-family: var(--mono);
-  font-size: 32px;
+.account-heading {
+  font-size: 28px;
   font-weight: 700;
-  margin-bottom: 8px;
-  background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  letter-spacing: -0.03em;
+  margin-bottom: 10px;
 }
 
 .account-subtitle {
   font-size: 15px;
   color: var(--text-dim);
   line-height: 1.5;
-}
-
-.account-features {
-  width: 100%;
-  margin-bottom: 40px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.feature-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 20px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  text-align: left;
-}
-
-.feature-icon {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-2);
-  border-radius: var(--radius);
-  color: var(--accent);
-}
-
-.feature-icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.feature-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.feature-text strong {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.feature-text span {
-  font-size: 13px;
-  color: var(--text-dim);
 }
 
 .user-card {

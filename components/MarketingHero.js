@@ -3,7 +3,11 @@
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import Script from 'next/script';
+import { useRouter } from 'next/navigation';
 import localFont from 'next/font/local';
+import { initAuth, requestReadAccess } from '@/lib/auth';
+import { trackEvent } from '@/lib/analytics';
 import styles from './MarketingHero.module.css';
 
 const inter = localFont({
@@ -41,10 +45,44 @@ function Icon({ name, className = '' }) {
   return <img src={`/icons/feather/${name}.svg`} width="24" height="24" alt="" aria-hidden="true" className={`${styles.icon} ${className}`} />;
 }
 
-export default function MarketingHero() {
+export default function MarketingHero({ clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID }) {
+  const router = useRouter();
+  const [signInReady, setSignInReady] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const signInPending = useRef(false);
+  const [signInError, setSignInError] = useState(clientId ? null : 'Google sign-in is unavailable because the OAuth client ID is not configured.');
   const [activeStep, setActiveStep] = useState(0);
   const tabRefs = useRef([]);
   const step = steps[activeStep];
+
+  function handleGoogleReady() {
+    if (!clientId) return;
+    try {
+      initAuth(clientId);
+      setSignInReady(true);
+      setSignInError(null);
+    } catch {
+      setSignInError('Google sign-in could not initialize. Refresh the page and try again.');
+    }
+  }
+
+  async function handleSignIn() {
+    if (!signInReady || signInPending.current) return;
+    signInPending.current = true;
+    setSigningIn(true);
+    setSignInError(null);
+    trackEvent('sign_in_started');
+    try {
+      // Request access in the click handler so Google can open its popup.
+      await requestReadAccess();
+      router.push('/app');
+    } catch (error) {
+      setSignInError(error.message || 'Google sign-in failed. Try again.');
+    } finally {
+      signInPending.current = false;
+      setSigningIn(false);
+    }
+  }
 
   function handleStepKey(event, index) {
     let next;
@@ -60,6 +98,9 @@ export default function MarketingHero() {
 
   return (
     <div className={`${styles.page} ${inter.variable}`}>
+      <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive"
+        onReady={handleGoogleReady}
+        onError={() => { setSignInReady(false); setSignInError('Google sign-in could not load. Check your connection and refresh the page.'); }} />
       <a className={styles.skipLink} href="#main-content">Skip to content</a>
       <header className={styles.header}>
         <div className={styles.headerInner}>
@@ -78,13 +119,14 @@ export default function MarketingHero() {
             <h1 id="hero-title" className={styles.title}>Keep the file.<br /><span>Lose the duplicates.</span></h1>
             <div className={styles.intro}>
               <p>Find exact duplicates in your Google Drive. Decide what stays. Move the extras safely.</p>
-              <Link href="/app?start=signin" prefetch={false} className={styles.cta}>
-                Find duplicates <Icon name="arrow-right" />
-              </Link>
-              <p className={styles.helper}>
+              <button type="button" onClick={handleSignIn} disabled={!signInReady || signingIn} className={styles.cta} aria-describedby="signin-helper">
+                {signingIn ? 'Signing in…' : 'Find duplicates'} <Icon name="arrow-right" />
+              </button>
+              <p id="signin-helper" className={styles.helper}>
                 <img src="/icons/google.svg" width="24" height="24" alt="" aria-hidden="true" />
-                Sign in with Google on the next screen.
+                {signInReady ? 'Sign in with Google. Read-only access.' : signInError ? 'Google sign-in is unavailable.' : 'Loading Google sign-in…'}
               </p>
+              {signInError && <p className={styles.signInError} role="alert">{signInError}</p>}
             </div>
           </div>
         </section>

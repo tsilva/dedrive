@@ -1,6 +1,6 @@
 import { SCREEN_STEPS } from './screen-steps';
 
-export default function Header({ screen = 'account', user = null }) {
+export default function Header({ screen = 'account', user = null, showWorkflow = true }) {
   const getScreenStatus = (id) => {
     const order = ['account', 'scan', 'review', 'execute'];
     const currentIdx = order.indexOf(screen);
@@ -13,7 +13,7 @@ export default function Header({ screen = 'account', user = null }) {
   return (
     <header className="header">
       <div className="logo">dedrive</div>
-      <nav className="nav" aria-label="Workflow steps">
+      {showWorkflow && <nav className="nav" aria-label="Workflow steps">
         {SCREEN_STEPS.map((s) => {
           const status = getScreenStatus(s.id);
           return (
@@ -26,7 +26,7 @@ export default function Header({ screen = 'account', user = null }) {
             </div>
           );
         })}
-      </nav>
+      </nav>}
       <div className="header-actions">
         {user ? (
           <div className="user-info">

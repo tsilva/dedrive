@@ -39,15 +39,21 @@ No actionable P0/P1/P2 findings remain in the home page.
 - ArrowRight moves keyboard focus/selection to the move tab and updates the move label and explanatory text.
 - Home returns focus/selection to the read-only tab.
 - How it works scrolls the workflow section to its intended offset.
-- Find duplicates opens the secure app and its sign-in introduction; the existing app consumes the `start=signin` query and returns to `/app`.
+- Find duplicates requests Google sign-in from its click handler and enters `/app` only after read-only access is granted. Regression tests verify cancellation/retry and reuse of the in-memory session in the app without a second access request.
 - GitHub destination and accessible name inspected; no external write actions taken.
 - Mobile and tablet images load; measured document widths do not exceed the available viewport.
 - Browser logs checked: no errors or warnings; development HMR and React DevTools messages only.
-- Existing 69 regression tests pass. Production build passes.
+- All 76 regression tests pass. Production build passes.
+
+## Secure-app entry correction
+
+Removed the redundant introduction, feature cards, entry banner, and workflow navigation before sign-in. The compact entry screen retains the Google sign-in gate and read-only access explanation. Regression coverage verifies that scan settings appear after sign-in and that entering the app does not request write access or start a scan. Browser evidence: `/Users/tsilva/.codex/visualizations/2026/10/01/01a0f699-f472-7e33-84e0-d0fa6aef9688/secure-signin-fixed.png`.
+
+The home-page CTA now opens Google directly, bypassing the app's signed-out fallback. Both routes use the Script `onReady` callback so a previously loaded Google script initializes after navigation. Browser evidence of the current home-page configuration-error state: `/Users/tsilva/.codex/visualizations/2026/10/01/01a0f699-f472-7e33-84e0-d0fa6aef9688/home-direct-signin.png`.
 
 ## Test gap
 
-Google OAuth cannot be completed in this checkout because `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is absent. The secure app displays its existing configuration error. Home-page navigation was verified; no Drive access or file moves were attempted.
+Google OAuth cannot be completed in this checkout because `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is absent. The home page displays the configuration error and disables the sign-in CTA. Successful sign-in, navigation, cancellation/retry, and session reuse are covered with mocked Google access in the regression suite; no real Drive access or file moves were attempted.
 
 ## Implementation checklist
 

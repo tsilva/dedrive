@@ -10,7 +10,7 @@ dedrive is a browser-based Google Drive duplicate finder built with Next.js. It 
 
 The cleanup flow starts with read-only Drive access. If you choose to proceed, dedrive asks for write access only before moving copies you marked as duplicates into a `_dupes` folder.
 
-The home page introduces the scan, review, and move workflow with an interactive example using sample files. **Find duplicates** opens the secure `/app` sign-in flow; the example never connects to your Drive or changes files.
+The home page introduces the scan, review, and move workflow with an interactive example using sample files. **Find duplicates** opens Google sign-in directly from the home page, requesting read-only Drive access. After sign-in, the secure `/app` flow opens with scan settings. The example never connects to your Drive or changes files.
 
 ## Install
 

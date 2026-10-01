@@ -10,8 +10,11 @@ const mocks = vi.hoisted(() => ({
   getSettings: vi.fn(),
   getUserInfo: vi.fn(),
   initAuth: vi.fn(),
+  isSignedIn: vi.fn(),
   requestReadAccess: vi.fn(),
   requestWriteAccess: vi.fn(),
+  replaceRoute: vi.fn(),
+  search: '',
   saveSettings: vi.fn(),
 }));
 
@@ -19,13 +22,13 @@ const FOLDER = 'application/vnd.google-apps.folder';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/app',
-  useRouter: () => ({ replace: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ replace: mocks.replaceRoute }),
+  useSearchParams: () => new URLSearchParams(mocks.search),
 }));
 vi.mock('next/script', () => ({
-  default: ({ onLoad, onError }) => (
+  default: ({ onReady, onError }) => (
     <div>
-      <button data-testid="gsi-load" onClick={onLoad}>Load GIS</button>
+      <button data-testid="gsi-load" onClick={onReady}>Load GIS</button>
       <button data-testid="gsi-error" onClick={onError}>Fail GIS</button>
     </div>
   ),
@@ -66,6 +69,7 @@ vi.mock('@/lib/auth', () => ({
   initAuth: mocks.initAuth,
   invalidateAuth: vi.fn(),
   isAuthExpiredError: (error) => error?.code === 'AUTH_EXPIRED',
+  isSignedIn: mocks.isSignedIn,
   ensureReadAccess: mocks.ensureReadAccess,
   ensureWriteAccess: mocks.ensureWriteAccess,
   requestReadAccess: mocks.requestReadAccess,
@@ -89,16 +93,22 @@ vi.mock('@/lib/analytics', () => ({
   trackException: vi.fn(),
 }));
 
-async function signInAndStartScan() {
+async function signIn() {
   fireEvent.click(screen.getByTestId('gsi-load'));
   fireEvent.click(screen.getByRole('button', { name: /sign in with google/i }));
-  const startButton = await screen.findByRole('button', { name: /start scan/i });
+  return screen.findByRole('button', { name: /start scan/i });
+}
+
+async function signInAndStartScan() {
+  const startButton = await signIn();
   fireEvent.click(startButton);
 }
 
 describe('top-level scan outcomes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.search = '';
+    mocks.isSignedIn.mockReturnValue(false);
     mocks.requestReadAccess.mockResolvedValue('token');
     mocks.ensureReadAccess.mockResolvedValue('token');
     mocks.getUserInfo.mockResolvedValue({
@@ -131,6 +141,7 @@ describe('top-level scan outcomes', () => {
       parents: ['root-id'],
     })));
     render(<App clientId="test-client-id" />);
+    const startButton = await signIn();
     const toggle = screen.getByRole('checkbox', { name: /ignore files smaller than 1 KB/i });
     expect(toggle).toBeChecked();
     if (!enabled) {
@@ -138,7 +149,7 @@ describe('top-level scan outcomes', () => {
       expect(toggle).not.toBeChecked();
       expect(mocks.saveSettings).toHaveBeenCalledWith({ ignoreSmallFiles: false });
     }
-    await signInAndStartScan();
+    fireEvent.click(startButton);
     if (hasDuplicates) {
       expect(await screen.findByText('Decision count: 0')).toBeInTheDocument();
     } else {
@@ -146,10 +157,56 @@ describe('top-level scan outcomes', () => {
     }
   });
 
-  it('restores a disabled small-file filter from settings', () => {
+  it('restores a disabled small-file filter from settings after sign-in', async () => {
     mocks.getSettings.mockReturnValue({ blacklistedPathPrefixes: [], ignoreSmallFiles: false });
     render(<App clientId="test-client-id" />);
+    await signIn();
     expect(screen.getByRole('checkbox', { name: /ignore files smaller than 1 KB/i })).not.toBeChecked();
+  });
+
+  it('keeps a compact fallback for direct signed-out app visits without the old introduction or scan settings', async () => {
+    mocks.search = 'start=signin';
+    render(<App clientId="test-client-id" />);
+
+    expect(screen.getByRole('heading', { name: 'Connect Google Drive' })).toBeInTheDocument();
+    expect(screen.queryByText('Smart Scan')).not.toBeInTheDocument();
+    expect(screen.queryByText('Preview & Compare')).not.toBeInTheDocument();
+    expect(screen.queryByText('Safe Cleanup')).not.toBeInTheDocument();
+    expect(screen.queryByText(/you are now on the secure app/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(mocks.replaceRoute).toHaveBeenCalledWith('/app');
+
+    await signIn();
+    expect(screen.getByRole('heading', { name: 'Set up your scan' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /ignore files smaller than 1 KB/i })).toBeChecked();
+    expect(screen.getByLabelText(/path prefix to exclude from scans/i)).toBeInTheDocument();
+    expect(mocks.requestReadAccess).toHaveBeenCalledOnce();
+    expect(mocks.requestWriteAccess).not.toHaveBeenCalled();
+    expect(mocks.fetchAllFiles).not.toHaveBeenCalled();
+  });
+
+  it('uses the home-page sign-in session and opens scan settings without requesting access again', async () => {
+    mocks.isSignedIn.mockReturnValue(true);
+    render(<App clientId="test-client-id" />);
+
+    expect(screen.queryByRole('heading', { name: 'Connect Google Drive' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Set up your scan' })).toBeInTheDocument();
+    expect(screen.getByText('Drive User')).toBeInTheDocument();
+    expect(mocks.getUserInfo).toHaveBeenCalledOnce();
+    expect(mocks.requestReadAccess).not.toHaveBeenCalled();
+    expect(mocks.requestWriteAccess).not.toHaveBeenCalled();
+    expect(mocks.fetchAllFiles).not.toHaveBeenCalled();
+  });
+
+  it('offers sign-in again if the home-page session cannot load its account', async () => {
+    mocks.isSignedIn.mockReturnValue(true);
+    mocks.getUserInfo.mockRejectedValue(new Error('Google session expired.'));
+    render(<App clientId="test-client-id" />);
+
+    expect(await screen.findByText('Google session expired.')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('gsi-load'));
+    expect(screen.getByRole('button', { name: /sign in with google/i })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /start scan/i })).not.toBeInTheDocument();
   });
 
   it('returns a signed-in user to Account with a success notice after a zero-result scan', async () => {
