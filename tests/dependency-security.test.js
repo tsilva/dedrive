@@ -25,9 +25,14 @@ describe('dependency security boundaries', () => {
   it('keeps every alerted dependency family above its patched floor', () => {
     const lock = readFileSync(resolve(process.cwd(), 'pnpm-lock.yaml'), 'utf8');
 
-    expect(lock).toContain('pdfjs-dist@6.2.108:');
-    expect(lock).toContain('postcss@8.5.23:');
-    expect(lock).toContain('nanoid@3.3.18:');
+    for (const [family, floor] of [['pdfjs-dist', [6, 2, 108]], ['postcss', [8, 5, 23]], ['nanoid', [3, 3, 18]]]) {
+      const versions = [...lock.matchAll(new RegExp(`^  ${family}@([^:]+):`, 'gm'))].map((match) => match[1].split('.').map(Number));
+      expect(versions.length).toBeGreaterThan(0);
+      for (const version of versions) {
+        const firstDifference = version.findIndex((part, index) => part !== floor[index]);
+        expect(firstDifference === -1 || version[firstDifference] > floor[firstDifference]).toBe(true);
+      }
+    }
   });
 
   it('loads a legitimate PDF with dynamic evaluation disabled', async () => {
