@@ -1,10 +1,12 @@
-<div align="center">
+<p align="center">
   <img src="logo.png" alt="dedrive" width="512" />
+  <br />
+  <!-- repo-tagline:start -->
+  <strong>🔍 Find duplicate Google Drive files with a private cleanup workflow 🧹</strong>
+  <!-- repo-tagline:end -->
+</p>
 
-  **🔍 Find duplicate files in Google Drive with a private, read-only-first cleanup flow 🧹**
-
-  [Live Demo](https://dedrive.tsilva.eu)
-</div>
+[Live Demo](https://dedrive.tsilva.eu)
 
 dedrive is a browser-based Google Drive duplicate finder built with Next.js. It scans your own Drive files, groups exact matches by checksum, and lets you choose which copies to keep before making any changes.
 
