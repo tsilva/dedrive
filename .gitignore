@@ -53,3 +53,5 @@ logs/
 out/
 .lighthouse/
 .pnpm-store/
+/INBOX.md
+/.local/repo-inbox/
