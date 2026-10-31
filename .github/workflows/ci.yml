@@ -24,6 +24,9 @@ jobs:
         with:
           node-version: 24
 
+      - name: Check gateway credential boundary offline
+        run: python3 scripts/test_openrouter_preflight.py
+
       - name: Enable pnpm
         run: corepack enable
 

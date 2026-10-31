@@ -71,4 +71,15 @@ pnpm start    # serve the production build
 
 [MIT](LICENSE)
 
+The branding preflight (`scripts/openrouter-preflight.sh`) checks provider credits
+through AgentBridge. Set `AGENTBRIDGE_BASE_URL` (default
+`http://127.0.0.1:8082/api/v1`) and optionally `AGENTBRIDGE_API_KEY`; the script
+never reads an upstream OpenRouter key.
+The preflight passes an optional gateway credential to curl through stdin,
+rejects control characters, and suppresses response bodies and transport details.
+The base URL must not contain credentials, a query string or a fragment.
+Credentialed agent runs still require a reviewed sandboxed proxy route; this
+repository does not provision one. Run the offline regression checks with
+`python3 scripts/test_openrouter_preflight.py`.
+
 Production delivery keeps Vercel secret isolation enabled and distinguishes public configuration from private credentials; see [production delivery](docs/production-delivery.md).

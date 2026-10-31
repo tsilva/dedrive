@@ -1,55 +1,53 @@
 #!/usr/bin/env bash
+set +x
 set -euo pipefail
 
-OPENROUTER_ENV_FILE="${HOME}/.config/repologogen/.env"
-
-load_openrouter_key() {
-  if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then
-    return
-  fi
-
-  if [[ ! -f "$OPENROUTER_ENV_FILE" ]]; then
-    return
-  fi
-
-  local key
-  key="$(grep -E '^OPENROUTER_API_KEY=' "$OPENROUTER_ENV_FILE" | tail -n 1 | cut -d '=' -f 2- || true)"
-  key="${key%\"}"
-  key="${key#\"}"
-  key="${key%\'}"
-  key="${key#\'}"
-
-  if [[ -n "$key" ]]; then
-    export OPENROUTER_API_KEY="$key"
-  fi
-}
-
-load_openrouter_key
-
-if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
-  echo "OpenRouter preflight failed: OPENROUTER_API_KEY is not set."
-  echo "Set it in the environment or in ${OPENROUTER_ENV_FILE}."
+# Compatibility filename; upstream account credentials belong to AgentBridge.
+dedrive_gateway_key="${AGENTBRIDGE_API_KEY:-}"
+export -n dedrive_gateway_key
+unset AGENTBRIDGE_API_KEY
+if [[ "$dedrive_gateway_key" =~ [[:cntrl:]] ]]; then
+  echo 'AGENTBRIDGE_API_KEY must not contain control characters.' >&2
+  exit 1
+fi
+gateway_url="${AGENTBRIDGE_BASE_URL:-http://127.0.0.1:8082/api/v1}"
+case "$gateway_url" in
+  http://openrouter.ai*|https://openrouter.ai*)
+    echo 'Configure an AgentBridge endpoint.' >&2; exit 1 ;;
+  http://*|https://*) ;;
+  *) echo 'AGENTBRIDGE_BASE_URL must be an HTTP(S) URL.' >&2; exit 1 ;;
+esac
+gateway_authority="${gateway_url#*://}"
+gateway_authority="${gateway_authority%%/*}"
+if [[ "$gateway_url" =~ [[:cntrl:]] || "$gateway_url" == *\?* ||
+      "$gateway_url" == *\#* || "$gateway_authority" == *@* ||
+      -z "$gateway_authority" ]]; then
+  echo 'Use an AgentBridge base URL without credentials, query or fragment.' >&2
   exit 1
 fi
 
-response_file="$(mktemp)"
-trap 'rm -f "$response_file"' EXIT
-
-status_code="$(
-  curl -sS \
-    -o "$response_file" \
-    -w '%{http_code}' \
-    -H "Authorization: Bearer ${OPENROUTER_API_KEY}" \
-    -H 'Accept: application/json' \
-    -H 'HTTP-Referer: https://dedrive.tsilva.eu' \
-    -H 'X-Title: dedrive branding preflight' \
-    https://openrouter.ai/api/v1/credits
-)"
-
-if [[ "$status_code" != 2* ]]; then
-  echo "OpenRouter preflight failed: authenticated request returned HTTP ${status_code}."
-  sed -n '1,20p' "$response_file"
+curl_args=(-q -s -o /dev/null -w '%{http_code}' -H 'Accept: application/json')
+if [[ -n "$dedrive_gateway_key" ]]; then
+  curl_args+=(--header @-)
+fi
+if ! status_code="$(
+  {
+    if [[ -n "$dedrive_gateway_key" ]]; then
+      printf 'Authorization: Bearer %s\n' "$dedrive_gateway_key"
+    fi
+  } | curl "${curl_args[@]}" "${gateway_url%/}/openrouter/credits" 2>/dev/null
+)"; then
+  echo 'AgentBridge preflight failed: transport error.' >&2
   exit 1
 fi
+case "$status_code" in
+  2[0-9][0-9]) ;;
+  [0-9][0-9][0-9])
+    echo "AgentBridge preflight failed: HTTP ${status_code}." >&2
+    exit 1 ;;
+  *)
+    echo 'AgentBridge preflight failed: invalid HTTP status.' >&2
+    exit 1 ;;
+esac
 
-echo "OpenRouter preflight passed."
+echo 'AgentBridge account preflight passed.'
