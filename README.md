@@ -38,6 +38,7 @@ NEXT_PUBLIC_SITE_URL=https://dedrive.tsilva.eu
 ./setup.sh    # configure Google Cloud OAuth, write .env.local, install deps
 pnpm dev      # start the Next.js dev server
 pnpm test     # run the Vitest regression suite
+pnpm audit    # check production and development dependencies for advisories
 pnpm build    # build for production
 pnpm start    # serve the production build
 ```
@@ -45,6 +46,7 @@ pnpm start    # serve the production build
 ## Notes
 
 - Requires Node.js, pnpm, a Google Cloud project, and an OAuth web client with the Google Drive API enabled.
+- Dependency security floors are Next.js 16.4.1, Vite 7.3.7, Vitest mocker 4.1.12 and Undici 8.12.2. The Undici override is limited to jsdom's test dependency; the seven-day package-age rule and existing PDF.js, PostCSS and nanoid regression guards remain in place.
 - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is required. `NEXT_PUBLIC_SITE_URL` is optional and defaults to `https://dedrive.tsilva.eu`.
 - Optional marketing-route metadata integrations use `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `GOOGLE_SITE_VERIFICATION`, `BING_SITE_VERIFICATION`, and `YANDEX_SITE_VERIFICATION`; analytics are disabled inside `/app`.
 - The privileged workflow runs at `/app`; there are no backend API routes, and the route uses a nonce-based Content Security Policy for scripts.

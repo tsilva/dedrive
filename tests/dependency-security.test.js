@@ -25,8 +25,19 @@ describe('dependency security boundaries', () => {
   it('keeps every alerted dependency family above its patched floor', () => {
     const lock = readFileSync(resolve(process.cwd(), 'pnpm-lock.yaml'), 'utf8');
 
-    for (const [family, floor] of [['pdfjs-dist', [6, 2, 108]], ['postcss', [8, 5, 23]], ['nanoid', [3, 3, 18]]]) {
-      const versions = [...lock.matchAll(new RegExp(`^  ${family}@([^:]+):`, 'gm'))].map((match) => match[1].split('.').map(Number));
+    const patchedFloors = [
+      ['pdfjs-dist', [6, 2, 108]],
+      ['postcss', [8, 5, 23]],
+      ['nanoid', [3, 3, 18]],
+      ['next', [16, 4, 1]],
+      ['vite', [7, 3, 7]],
+      ['@vitest/mocker', [4, 1, 12]],
+      ['undici', [8, 12, 2]],
+    ];
+
+    for (const [family, floor] of patchedFloors) {
+      const versions = [...lock.matchAll(new RegExp(`^  ['"]?${family}@([^:\\n]+):`, 'gm'))]
+        .map((match) => match[1].split('(')[0].replace(/['"]$/, '').split('.').map(Number));
       expect(versions.length).toBeGreaterThan(0);
       for (const version of versions) {
         const firstDifference = version.findIndex((part, index) => part !== floor[index]);
