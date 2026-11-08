@@ -11,7 +11,7 @@ import { trackEvent } from '@/lib/analytics';
 import styles from './MarketingHero.module.css';
 
 const inter = localFont({
-  src: '../public/fonts/InterVariable.woff2',
+  src: '../public/fonts/InterVariable-latin.woff2',
   variable: '--marketing-font',
   display: 'swap',
   weight: '100 900',
