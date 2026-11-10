@@ -14,7 +14,7 @@ const inter = localFont({
   src: '../public/fonts/InterVariable-latin.woff2',
   variable: '--marketing-font',
   display: 'swap',
-  weight: '100 900',
+  weight: '400 800',
 });
 
 const steps = [
