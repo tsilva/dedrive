@@ -155,7 +155,7 @@ export default function MarketingHero({ clientId = process.env.NEXT_PUBLIC_GOOGL
             <div className={styles.comparison}>
               {['photo.jpg', 'photo-copy.jpg'].map((name, index) => (
                 <figure key={name} className={styles.file}>
-                  <Image src="/images/coastal-duplicates.png" alt={index === 0 ? 'Coastal cliffs, blue sea, and wildflowers' : 'An identical copy of the coastal photograph'} width={1536} height={1024} sizes="(max-width: 600px) 42vw, (max-width: 1050px) 38vw, 22vw" loading="eager" />
+                  <Image src="/images/coastal-duplicates.png" alt={index === 0 ? 'Coastal cliffs, blue sea, and wildflowers' : 'An identical copy of the coastal photograph'} width={1536} height={1024} sizes="(max-width: 480px) calc(50vw - 44px), (max-width: 800px) calc(50vw - 50px), (max-width: 1100px) calc(31.5vw - 53px), (max-width: 1240px) calc(23.1vw - 43px), 244px" loading="eager" />
                   <figcaption>
                     <span className={styles.filename}>{name}</span>
                     <span className={index === 0 ? styles.keep : styles.move}>
