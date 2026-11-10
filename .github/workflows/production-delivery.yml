@@ -3,8 +3,6 @@ name: Production delivery
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - .github/workflows/production-delivery.yml
   workflow_dispatch:
     inputs:
       stage_prebuilt:
@@ -67,35 +65,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
-  deploy:
-    name: Deploy synced commit after CI succeeds
+  publish:
     needs: sync
-    if: github.ref == 'refs/heads/main' && !inputs.stage_prebuilt
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    environment: Production
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - name: Check out the exact main commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Wait for CI and deploy the exact synced commit
-        run: python3 .github/scripts/production_delivery.py deploy
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-
-  stage_prebuilt:
-    needs: sync
-    if: github.ref == 'refs/heads/main' && inputs.stage_prebuilt
+    if: github.ref == 'refs/heads/main'
     uses: tsilva/.github/.github/workflows/vercel-prebuilt.yml@22bb600ee7e3b22d238b284c132a3ad64a968719
     with:
       project_id: prj_RWYGMgqwSR27K49CkXMtCwCtH9Pq
       project_name: dedrive
       production_domains: '["dedrive.tsilva.eu","dedrive-web.vercel.app"]'
       public_environment: '["NEXT_PUBLIC_GA_MEASUREMENT_ID","NEXT_PUBLIC_GOOGLE_CLIENT_ID"]'
+      promote: ${{ !inputs.stage_prebuilt }}
     secrets:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
