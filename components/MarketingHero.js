@@ -11,7 +11,7 @@ import { trackEvent } from '@/lib/analytics';
 import styles from './MarketingHero.module.css';
 
 const inter = localFont({
-  src: '../public/fonts/InterVariable.woff2',
+  src: '../public/fonts/InterVariable-latin.woff2',
   variable: '--marketing-font',
   display: 'swap',
   weight: '100 900',
@@ -113,7 +113,7 @@ export default function MarketingHero({ clientId = process.env.NEXT_PUBLIC_GOOGL
           </nav>
         </div>
       </header>
-      <main id="main-content">
+      <main id="main-content" tabIndex={-1}>
         <section className={styles.hero} aria-labelledby="hero-title">
           <div className={styles.heroInner}>
             <h1 id="hero-title" className={styles.title}>Keep the file.<br /><span>Lose the duplicates.</span></h1>
@@ -122,7 +122,7 @@ export default function MarketingHero({ clientId = process.env.NEXT_PUBLIC_GOOGL
               <button type="button" onClick={handleSignIn} disabled={!signInReady || signingIn} className={styles.cta} aria-describedby="signin-helper">
                 {signingIn ? 'Signing in…' : 'Find duplicates'} <Icon name="arrow-right" />
               </button>
-              <p id="signin-helper" className={styles.helper}>
+              <p id="signin-helper" role="status" className={styles.helper}>
                 <img src="/icons/google.svg" width="24" height="24" alt="" aria-hidden="true" />
                 {signInReady ? 'Sign in with Google. Read-only access.' : signInError ? 'Google sign-in is unavailable.' : 'Loading Google sign-in…'}
               </p>

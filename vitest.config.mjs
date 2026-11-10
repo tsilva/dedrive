@@ -5,9 +5,9 @@ import { defineConfig } from 'vitest/config';
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  esbuild: {
-    loader: 'jsx',
-    jsx: 'automatic',
+  oxc: {
+    lang: 'jsx',
+    jsx: { runtime: 'automatic' },
     include: /.*\.jsx?$/,
     exclude: [],
   },
