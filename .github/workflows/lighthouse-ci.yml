@@ -13,6 +13,6 @@ concurrency:
 
 jobs:
   audit:
-    uses: tsilva/.github/.github/workflows/lighthouse-ci.yml@8431a260737bf768359214a20a97295a76e8ff55
+    uses: tsilva/.github/.github/workflows/lighthouse-ci.yml@c262be7b75fe4654c170eb5e13240808a70b9936
     with:
       url: "https://dedrive.tsilva.eu/"
