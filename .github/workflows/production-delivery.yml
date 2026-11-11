@@ -113,7 +113,7 @@ jobs:
         github.event.workflow_run.path == '.github/workflows/ci.yml' &&
         github.event.workflow_run.repository.id == github.repository_id &&
         github.event.workflow_run.head_repository.id == github.repository_id))
-    uses: tsilva/.github/.github/workflows/vercel-prebuilt.yml@22bb600ee7e3b22d238b284c132a3ad64a968719
+    uses: tsilva/.github/.github/workflows/vercel-prebuilt.yml@c262be7b75fe4654c170eb5e13240808a70b9936
     with:
       project_id: prj_RWYGMgqwSR27K49CkXMtCwCtH9Pq
       project_name: dedrive
