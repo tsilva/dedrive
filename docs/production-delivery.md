@@ -1,6 +1,14 @@
 # Production delivery
 
-Push to `main` triggers `.github/workflows/production-delivery.yml`. It tests delivery boundaries and waits for the same commit’s CI before retrieving secrets. Then it syncs the fixed production allowlist in `.github/scripts/production-delivery.json`, builds that exact commit on GitHub Actions, stages the prebuilt Vercel deployment, and verifies it before promotion. Vercel’s automatic Git deployments are disabled so they cannot race the sync.
+A successful `CI` completion for a push to `main` triggers `.github/workflows/production-delivery.yml` through `workflow_run`. It tests delivery boundaries and rechecks the same commit’s already successful CI before retrieving secrets. Then it syncs the fixed production allowlist in `.github/scripts/production-delivery.json`, builds that exact commit on GitHub Actions, stages the prebuilt Vercel deployment, and verifies it before promotion. Vercel’s automatic Git deployments are disabled so they cannot race the sync.
+
+Automatic delivery accepts only successful main-push CI from this repository,
+for the same SHA as the delivery run and the current head of `main`. The CI
+workflow path, immutable repository IDs, run ID and rerun attempt are checked
+again against GitHub before secret access. Failed, cancelled, forked, stale or
+superseded runs cannot deploy. Manual and secret-change relay dispatches remain
+available, but fail immediately if the latest exact-commit CI is not already
+successful. CI artifacts and caches are not imported into the trusted sync job.
 
 Infisical remains the source of application secrets. Local development uses the existing human CLI login and Development environment. This app has no private production application keys; its empty sync allowlist needs no Infisical identity. The provider credential is a project-scoped `VERCEL_TOKEN` stored in the repository’s GitHub Production environment. No general CLI login is copied into GitHub.
 
