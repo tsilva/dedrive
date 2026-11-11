@@ -10,6 +10,7 @@ import { initAuth, requestReadAccess } from '@/lib/auth';
 import { trackEvent } from '@/lib/analytics';
 import styles from './MarketingHero.module.css';
 
+// Subset provenance and regeneration: docs/marketing-font.md.
 const inter = localFont({
   src: '../public/fonts/InterVariable-latin.woff2',
   variable: '--marketing-font',
