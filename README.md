@@ -8,80 +8,27 @@
 
 [Live Demo](https://dedrive.tsilva.eu)
 
-dedrive is a browser-based Google Drive duplicate finder built with Next.js. It scans your own Drive files, groups exact matches by checksum, and lets you choose which copies to keep before making any changes.
+dedrive finds exact duplicates in your Google Drive and lets you choose which
+copies to keep. It runs in your browser and groups eligible files by checksum.
 
-The cleanup flow starts with read-only Drive access. If you choose to proceed, dedrive asks for write access only before moving copies you marked as duplicates into a `_dupes` folder.
+## Try it
 
-The home page introduces the scan, review, and move workflow with an interactive example using sample files. **Find duplicates** opens Google sign-in directly from the home page, requesting read-only Drive access. After sign-in, the secure `/app` flow opens with scan settings. The example never connects to your Drive or changes files.
+Open the demo to walk through a cleanup with sample files, or choose
+**Find duplicates** to connect your Drive.
 
-## Install
+1. Sign in with read-only access and scan your files.
+2. Review each group and select every copy you want to keep.
+3. Grant write access when you are ready to move the remaining copies to a
+   private `_dupes` folder. The app revokes access after execution. Files are
+   never permanently deleted.
 
-```bash
-git clone https://github.com/tsilva/dedrive.git
-cd dedrive
-./setup.sh
-pnpm dev
-```
+The scan covers files you own in My Drive. It skips native Google Docs and
+Sheets because they lack checksums.
 
-Open [http://localhost:3000](http://localhost:3000), then use `/app` for the secure Drive workflow.
-
-If you configure Google Cloud manually instead of running `./setup.sh`, create `.env.local` with:
-
-```bash
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-NEXT_PUBLIC_SITE_URL=https://dedrive.tsilva.eu
-```
-
-## Commands
-
-```bash
-./setup.sh    # configure Google Cloud OAuth, write .env.local, install deps
-pnpm dev      # start the Next.js dev server
-pnpm test     # run the Vitest regression suite
-pnpm audit    # check production and development dependencies for advisories
-pnpm build    # build for production
-pnpm start    # serve the production build
-```
-
-## Notes
-
-- Requires Node.js, pnpm, a Google Cloud project, and an OAuth web client with the Google Drive API enabled.
-- Dependency security floors are Next.js 16.4.1, Vite 7.3.7, Vitest mocker 4.1.12 and Undici 8.12.2. The Undici override is limited to jsdom's test dependency; the seven-day package-age rule and existing PDF.js, PostCSS and nanoid regression guards remain in place.
-- `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is required. `NEXT_PUBLIC_SITE_URL` is optional and defaults to `https://dedrive.tsilva.eu`.
-- Optional marketing-route metadata integrations use `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `GOOGLE_SITE_VERIFICATION`, `BING_SITE_VERIFICATION`, and `YANDEX_SITE_VERIFICATION`; analytics are disabled inside `/app`.
-- The privileged workflow runs at `/app`; there are no backend API routes, and the route uses a nonce-based Content Security Policy for scripts.
-- Write access is requested only for execution and is revoked after the move flow finishes.
-- Google access tokens stay in memory. Expiry is handled at the active operation boundary: a scan returns to the signed-out account screen, while execution settles already-started moves, cancels unscheduled moves, and reports the partial result.
-- After execution, app auth data and app-owned local browser storage are purged automatically before returning to the initial screen.
-- Scan results and review decisions stay in the active browser tab. Non-sensitive settings use `localStorage`.
-- Google Workspace native files are skipped because they do not expose `md5Checksum`.
-- A scan with no duplicates and a review with no files marked to move both return to the signed-in account screen with a no-change notice. Non-auth scan failures return there with a retry message.
-- During review, select every copy you want to keep; unselected copies are marked to move. At least one explicit keep choice is required. The queue and copies within each group use deterministic natural source-path ordering, keeping nearby documents together and file positions consistent across scans. Groups show four files per page, and number keys 1–4 toggle the visible files while selections persist across pages. Enter/N confirms the current group, S skips, and E moves to execution.
-- The review layout uses the available viewport for one tall comparison row or a 2×2 grid. The next four files stay mounted offscreen so images, text, and first-page PDF canvases are ready as the user advances. PDF previews still offer optional fullscreen, zoom, page controls, and arrow-key navigation.
-- Preview downloads are capped at 10 MB, limited to two concurrent tasks, and cancelled when their page or workflow closes. At most four visible and four prefetched previews are mounted. Oversized files remain available through the Open in Drive link.
-- Drive requests exclude shared-drive items, and response processing retains only `ownedByMe` files, excluding the user's Shared with me collection. Owned files whose complete owned ancestry cannot be resolved to the My Drive root are also excluded, while files the user owns and has shared outward remain eligible.
-- Files smaller than 1 KB, or 1,024 bytes, are ignored by default. Disable this option on the first account screen to include them. The choice persists in local settings until post-execution cleanup.
-- Excluded path prefixes entered on the signed-in account screen are skipped during scans along with all of their child folders. Matching ignores case, accepts a trailing `/*`, and the list persists in local settings until post-execution cleanup.
-- Duplicates are moved only into a freshly verified, user-owned, unshared `_dupes` destination. If an existing marked or same-named cleanup folder is shared, dedrive leaves it unchanged, creates a private replacement, and reports that choice. Every app-marked cleanup root is ignored on future scans, and files are never permanently deleted. Mirrored folder ancestry is keyed by private Drive app properties and source folder IDs, so exact names—including whitespace and `/` characters—and same-named sibling folders remain distinct.
-- Drive retries are reason-aware: rate limits and safe read failures are retried, folder creation uses pre-generated IDs, and ambiguous file moves are reconciled against current parent metadata before retrying.
-
-## Architecture
-
-![dedrive architecture diagram](./architecture.png)
+See the [setup and cleanup guide](docs/guide.md) for local installation,
+filters, review controls, and move behavior, or
+[production delivery](docs/production-delivery.md) for deployment.
 
 ## License
 
-[MIT](LICENSE)
-
-The branding preflight (`scripts/openrouter-preflight.sh`) checks provider credits
-through AgentBridge. Set `AGENTBRIDGE_BASE_URL` (default
-`http://127.0.0.1:8082/api/v1`) and optionally `AGENTBRIDGE_API_KEY`; the script
-never reads an upstream OpenRouter key.
-The preflight passes an optional gateway credential to curl through stdin,
-rejects control characters, and suppresses response bodies and transport details.
-The base URL must not contain credentials, a query string or a fragment.
-Credentialed agent runs still require a reviewed sandboxed proxy route; this
-repository does not provision one. Run the offline regression checks with
-`python3 scripts/test_openrouter_preflight.py`.
-
-Production delivery keeps Vercel secret isolation enabled and distinguishes public configuration from private credentials; see [production delivery](docs/production-delivery.md).
+[MIT License](LICENSE).
