@@ -117,7 +117,7 @@ jobs:
     with:
       project_id: prj_RWYGMgqwSR27K49CkXMtCwCtH9Pq
       project_name: dedrive
-      production_domains: '["dedrive.tsilva.eu","dedrive-web.vercel.app"]'
+      production_domains: '["dedrive.tsilva.eu"]'
       public_environment: '["NEXT_PUBLIC_GA_MEASUREMENT_ID","NEXT_PUBLIC_GOOGLE_CLIENT_ID"]'
       promote: ${{ !inputs.stage_prebuilt }}
     secrets:
