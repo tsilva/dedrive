@@ -1,4 +1,3 @@
-import { Analytics } from '@vercel/analytics/next';
 import Script from 'next/script';
 import {
   absoluteUrl,
@@ -16,7 +15,6 @@ const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 const GOOGLE_SITE_VERIFICATION = process.env.GOOGLE_SITE_VERIFICATION;
 const BING_SITE_VERIFICATION = process.env.BING_SITE_VERIFICATION;
 const YANDEX_SITE_VERIFICATION = process.env.YANDEX_SITE_VERIFICATION;
-const SHOULD_LOAD_VERCEL_SCRIPTS = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ENV);
 
 export const metadata = {
   title: {
@@ -154,11 +152,6 @@ export default function MarketingLayout({ children }) {
         </>
       )}
       {children}
-      {SHOULD_LOAD_VERCEL_SCRIPTS && (
-        <>
-          <Analytics />
-        </>
-      )}
     </>
   );
 }

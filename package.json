@@ -31,7 +31,6 @@
   },
   "homepage": "https://github.com/tsilva/dedrive#readme",
   "dependencies": {
-    "@vercel/analytics": "^2.0.1",
     "next": "16.4.5",
     "pdfjs-dist": "^6.4.299",
     "react": "^19.3.1",
